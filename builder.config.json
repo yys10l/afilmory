@@ -1,8 +1,4 @@
 {
-  "repo": { 
-    "enable": false,
-    "url": "https://github.com/yys/gallery-public"
-  },
   "storage": { 
     "provider": "s3",
     "bucket": "yys",
