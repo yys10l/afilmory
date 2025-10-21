@@ -4,7 +4,7 @@
     "bucket": "yys",
     "region": "auto",
     "prefix": "yys/",
-    "endpoint": "http://94.159.111.93:5246",
+    "endpoint": "https://s3.2018888.xyz",
     "customDomain": "https://s3.2018888.xyz"
   }
 }
