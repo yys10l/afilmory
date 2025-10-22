@@ -1,11 +1,11 @@
 {
   "storage": { 
-    "provider": "/",
+    "provider": "s3",
     "bucket": "yys",
-    "region": "/",
-    "prefix": "/",
+    "region": "auto",
+    "prefix": "yys/",
     "endpoint": "http:/139.224.238.156:9000",
-     "customDomain": "http:/139.224.238.156:9000",
+     "customDomain": "https://gallery.link123.icu",
     "accessKeyId": "3a01e48416bc336b1952b5e83b34f2e3",
     "secretAccessKey": "36b91e1018146835d7ab0ad9ca05b7a978b8235c4de3f32e5dc9043bdbe212a8"
    }
