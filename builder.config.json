@@ -3,7 +3,7 @@
     "provider": "s3",
     "bucket": "yys",
     "region": "auto",
-    "prefix": "afilmory/",
+    "prefix": "/",
     "endpoint": "http://139.224.238.156:9000"
   }
 }
