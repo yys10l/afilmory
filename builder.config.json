@@ -1,8 +1,8 @@
 {
   "storage": { 
-    "provider": "s3",
+    "provider": "/",
     "bucket": "yys",
-    "region": "auto",
+    "region": "/",
     "prefix": "/",
     "endpoint": "http:/139.224.238.156:9000",
      "customDomain": "http:/139.224.238.156:9000",
