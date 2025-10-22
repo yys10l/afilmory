@@ -17,7 +17,7 @@ export function createS3Client(config: S3Config): S3Client {
   if (!accessKeyId || !secretAccessKey) {
     throw new Error('accessKeyId and secretAccessKey are required')
   }
-
+  forcePathStyle: true
   const keepAlive = config.keepAlive ?? true
   const maxSockets = config.maxSockets ?? 64
   const connectionTimeout = config.connectionTimeoutMs ?? 5_000
