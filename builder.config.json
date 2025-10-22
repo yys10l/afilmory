@@ -4,7 +4,7 @@
     "bucket": "yys",
     "region": "auto",
     "prefix": "/",
-    "endpoint": "http://139.224.238.156:9000",
-    "customDomain": "http://139.224.238.156:9000"
+    "endpoint": "https://gallery.link123.icu",
+    "customDomain": "https://gallery.link123.icu"
   }
 }
