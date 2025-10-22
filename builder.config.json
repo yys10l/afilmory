@@ -1,7 +1,7 @@
 {
   "storage": { 
     "provider": "s3",
-    "bucket": "",
+    "bucket": "yys",
     "region": "auto",
     "prefix": "/",
      "customDomain": "https://gallery.link123.icu",
