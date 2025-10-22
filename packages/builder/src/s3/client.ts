@@ -28,7 +28,7 @@ export function createS3Client(config: S3Config): S3Client {
 
   const httpAgent = new http.Agent({ keepAlive, maxSockets })
   const httpsAgent = new https.Agent({ keepAlive, maxSockets })
-
+  forcePathStyle: true
   const s3ClientConfig: S3ClientConfig = {
     region,
     credentials: {
