@@ -17,7 +17,7 @@ export function createS3Client(config: S3Config): S3Client {
   if (!accessKeyId || !secretAccessKey) {
     throw new Error('accessKeyId and secretAccessKey are required')
   }
-  forcePathStyle: true
+
   const keepAlive = config.keepAlive ?? true
   const maxSockets = config.maxSockets ?? 64
   const connectionTimeout = config.connectionTimeoutMs ?? 5_000
@@ -28,7 +28,7 @@ export function createS3Client(config: S3Config): S3Client {
 
   const httpAgent = new http.Agent({ keepAlive, maxSockets })
   const httpsAgent = new https.Agent({ keepAlive, maxSockets })
-  forcePathStyle: true
+
   const s3ClientConfig: S3ClientConfig = {
     region,
     credentials: {
@@ -40,6 +40,7 @@ export function createS3Client(config: S3Config): S3Client {
     requestChecksumCalculation: 'WHEN_REQUIRED',
     responseChecksumValidation: 'WHEN_REQUIRED',
     endpoint,
+    forcePathStyle: true, // 👈 添加到这里，强制使用路径风格 URL（MinIO 必需）
     requestHandler: new NodeHttpHandler({
       httpAgent,
       httpsAgent,
