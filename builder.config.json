@@ -1,6 +1,6 @@
 {
   "storage": { 
-    "provider": "",
+    "provider": "s3",
     "bucket": "yys",
     "region": "auto",
     "prefix": "/",
