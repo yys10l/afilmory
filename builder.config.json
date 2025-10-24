@@ -3,7 +3,7 @@
     "provider": "s3",
     "bucket": "yys",
     "region": "auto",
-    "prefix": "/",
+    "prefix": "yys/",
     "endpoint": "https://photo.link123.icu",
      "customDomain": "https://gallery.link123.icu"
    }
