@@ -1,6 +1,8 @@
 import './PhotoViewer.css'
 
 import type { PhotoManifestItem, PickedExif } from '@afilmory/builder'
+import { MotionButtonBase, ScrollArea } from '@afilmory/ui'
+import { Spring } from '@afilmory/utils'
 import { isNil } from 'es-toolkit/compat'
 import { useAtomValue } from 'jotai'
 import { m } from 'motion/react'
@@ -9,7 +11,6 @@ import { Fragment, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { isExiftoolLoadedAtom } from '~/atoms/app'
-import { ScrollArea } from '~/components/ui/scroll-areas/ScrollArea'
 import { useMobile } from '~/hooks/useMobile'
 import {
   CarbonIsoOutline,
@@ -20,9 +21,7 @@ import {
 } from '~/icons'
 import { getImageFormat } from '~/lib/image-utils'
 import { convertExifGPSToDecimal } from '~/lib/map-utils'
-import { Spring } from '~/lib/spring'
 
-import { MotionButtonBase } from '../button'
 import { formatExifData, Row } from './formatExifData'
 import { HistogramChart } from './HistogramChart'
 import { MiniMap } from './MiniMap'
@@ -59,9 +58,9 @@ export const ExifPanel: FC<{
     <m.div
       className={`${
         isMobile
-          ? 'exif-panel-mobile fixed right-0 bottom-0 left-0 z-10 max-h-[60vh] w-full rounded-t-2xl backdrop-blur-[70px]'
-          : 'relative w-80 shrink-0'
-      } bg-material-medium flex flex-col text-white`}
+          ? 'exif-panel-mobile fixed right-0 bottom-0 left-0 z-10 max-h-[60vh] w-full rounded-t-2xl backdrop-blur-2xl'
+          : 'relative w-80 shrink-0 backdrop-blur-2xl'
+      } border-accent/20 flex flex-col text-white`}
       initial={{
         opacity: 0,
         ...(isMobile ? { y: 100 } : { x: 100 }),
@@ -75,9 +74,23 @@ export const ExifPanel: FC<{
         ...(isMobile ? { y: 100 } : { x: 100 }),
       }}
       transition={Spring.presets.smooth}
-      style={{ pointerEvents: visible ? 'auto' : 'none' }}
+      style={{
+        pointerEvents: visible ? 'auto' : 'none',
+        backgroundImage:
+          'linear-gradient(to bottom right, color-mix(in srgb, var(--color-background) 98%, transparent), color-mix(in srgb, var(--color-background) 95%, transparent))',
+        boxShadow:
+          '0 8px 32px color-mix(in srgb, var(--color-accent) 8%, transparent), 0 4px 16px color-mix(in srgb, var(--color-accent) 6%, transparent), 0 2px 8px rgba(0, 0, 0, 0.1)',
+      }}
     >
-      <div className="mb-4 flex shrink-0 items-center justify-between p-4 pb-0">
+      {/* Inner glow layer */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'linear-gradient(to bottom right, color-mix(in srgb, var(--color-accent) 5%, transparent), transparent, color-mix(in srgb, var(--color-accent) 5%, transparent))',
+        }}
+      />
+      <div className="relative z-10 mb-4 flex shrink-0 items-center justify-between p-4 pb-0">
         <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold`}>
           {t('exif.header.title')}
         </h3>
@@ -87,7 +100,7 @@ export const ExifPanel: FC<{
         {isMobile && onClose && (
           <button
             type="button"
-            className="flex size-6 items-center justify-center rounded-full text-white/70 duration-200 hover:bg-white/10 hover:text-white"
+            className="glassmorphic-btn border-accent/20 flex size-6 items-center justify-center rounded-full border text-white/70 duration-200 hover:text-white"
             onClick={onClose}
           >
             <i className="i-mingcute-close-line text-sm" />
@@ -180,9 +193,9 @@ export const ExifPanel: FC<{
                   <h4 className="my-2 text-sm font-medium text-white/80">
                     {t('exif.capture.parameters')}
                   </h4>
-                  <div className={`grid grid-cols-2 gap-2`}>
+                  <div className="grid grid-cols-2 gap-2">
                     {formattedExifData.focalLength35mm && (
-                      <div className="flex h-6 items-center gap-2 rounded-md bg-white/10 px-2">
+                      <div className="border-accent/20 bg-accent/10 flex h-6 items-center gap-2 rounded-md border px-2">
                         <StreamlineImageAccessoriesLensesPhotosCameraShutterPicturePhotographyPicturesPhotoLens className="text-sm text-white/70" />
                         <span className="text-xs">
                           {formattedExifData.focalLength35mm}mm
@@ -191,7 +204,7 @@ export const ExifPanel: FC<{
                     )}
 
                     {formattedExifData.aperture && (
-                      <div className="flex h-6 items-center gap-2 rounded-md bg-white/10 px-2">
+                      <div className="border-accent/20 bg-accent/10 flex h-6 items-center gap-2 rounded-md border px-2">
                         <TablerAperture className="text-sm text-white/70" />
                         <span className="text-xs">
                           {formattedExifData.aperture}
@@ -200,7 +213,7 @@ export const ExifPanel: FC<{
                     )}
 
                     {formattedExifData.shutterSpeed && (
-                      <div className="flex h-6 items-center gap-2 rounded-md bg-white/10 px-2">
+                      <div className="border-accent/20 bg-accent/10 flex h-6 items-center gap-2 rounded-md border px-2">
                         <MaterialSymbolsShutterSpeed className="text-sm text-white/70" />
                         <span className="text-xs">
                           {formattedExifData.shutterSpeed}
@@ -209,7 +222,7 @@ export const ExifPanel: FC<{
                     )}
 
                     {formattedExifData.iso && (
-                      <div className="flex h-6 items-center gap-2 rounded-md bg-white/10 px-2">
+                      <div className="border-accent/20 bg-accent/10 flex h-6 items-center gap-2 rounded-md border px-2">
                         <CarbonIsoOutline className="text-sm text-white/70" />
                         <span className="text-xs">
                           ISO {formattedExifData.iso}
@@ -218,7 +231,7 @@ export const ExifPanel: FC<{
                     )}
 
                     {formattedExifData.exposureBias && (
-                      <div className="flex h-6 items-center gap-2 rounded-md bg-white/10 px-2">
+                      <div className="border-accent/20 bg-accent/10 flex h-6 items-center gap-2 rounded-md border px-2">
                         <MaterialSymbolsExposure className="text-sm text-white/70" />
                         <span className="text-xs">
                           {formattedExifData.exposureBias}
@@ -247,7 +260,7 @@ export const ExifPanel: FC<{
                         )
                       }}
                       key={tag}
-                      className="bg-material-medium hover:bg-material-thin inline-flex cursor-pointer items-center rounded-full px-2 py-1 text-xs text-white/90 backdrop-blur-sm"
+                      className="glassmorphic-btn border-accent/20 bg-accent/10 inline-flex cursor-pointer items-center rounded-full border px-2 py-1 text-xs text-white/90 backdrop-blur-sm"
                     >
                       {tag}
                     </MotionButtonBase>

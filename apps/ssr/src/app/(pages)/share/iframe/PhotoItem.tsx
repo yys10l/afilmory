@@ -6,10 +6,9 @@ import {
   MaterialSymbolsShutterSpeed,
   StreamlineImageAccessoriesLensesPhotosCameraShutterPicturePhotographyPicturesPhotoLens,
   TablerAperture,
-} from '@afilmory/components/icons/index.tsx'
+} from '@afilmory/ui'
+import { clsxm as cn } from '@afilmory/utils'
 import { thumbHashToDataURL } from 'thumbhash'
-
-import { cn } from '~/lib/cn'
 
 import { url } from '../../../../../../../config.json'
 

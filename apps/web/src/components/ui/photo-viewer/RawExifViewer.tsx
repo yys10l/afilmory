@@ -1,16 +1,15 @@
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
-
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-} from '~/components/ui/dialog'
-import { ScrollArea } from '~/components/ui/scroll-areas/ScrollArea'
+  DialogTrigger, ScrollArea 
+} from '@afilmory/ui'
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+
 import { ExifToolManager } from '~/lib/exiftool'
 import type { PhotoManifest } from '~/types/photo'
 
@@ -307,6 +306,7 @@ export const RawExifViewer: React.FC<RawExifViewerProps> = ({
       const response = await fetch(currentPhoto.originalUrl)
       const blob = await response.blob()
       const data = await ExifToolManager.parse(blob, currentPhoto.s3Key)
+
       setRawExifData(data || null)
       setIsOpen(true)
     } catch (error) {

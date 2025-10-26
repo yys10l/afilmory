@@ -3,9 +3,9 @@ import path from 'node:path'
 import type { _Object, S3Client } from '@aws-sdk/client-s3'
 import { GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
 
+import { backoffDelay, sleep } from '../../../../utils/src/backoff.js'
+import { Semaphore } from '../../../../utils/src/semaphore.js'
 import { SUPPORTED_FORMATS } from '../../constants/index.js'
-import { backoffDelay, sleep } from '../../lib/backoff.js'
-import { Semaphore } from '../../lib/semaphore.js'
 import { logger } from '../../logger/index.js'
 import { createS3Client } from '../../s3/client.js'
 import type {
@@ -229,7 +229,7 @@ export class S3StorageProvider implements StorageProvider {
       if (!obj.key) continue
 
       const dir = path.dirname(obj.key)
-      const basename = path.basename(obj.key, path.extname(obj.key))
+      const basename = path.parse(obj.key).name
       const groupKey = `${dir}/${basename}`
 
       if (!fileGroups.has(groupKey)) {

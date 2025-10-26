@@ -1,8 +1,8 @@
+import { cx } from '@afilmory/utils'
+import clsx from 'clsx'
 import type { FC } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-
-import { cx } from '~/lib/cn'
 
 interface CompressedHistogramData {
   red: number[]
@@ -192,6 +192,8 @@ export const HistogramChart: FC<{
   className?: string
 }> = ({ thumbnailUrl, className = '' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const previousHistogramRef = useRef<CompressedHistogramData | null>(null)
+  const animationRef = useRef<number | null>(null)
   const [histogram, setHistogram] = useState<CompressedHistogramData | null>(
     null,
   )
@@ -202,7 +204,6 @@ export const HistogramChart: FC<{
   useEffect(() => {
     setLoading(true)
     setError(false)
-    setHistogram(null)
 
     const img = new Image()
     img.crossOrigin = 'Anonymous'
@@ -249,15 +250,103 @@ export const HistogramChart: FC<{
   }, [thumbnailUrl])
 
   useEffect(() => {
-    if (histogram && canvasRef.current) {
-      drawHistogram(canvasRef.current, histogram)
+    if (!histogram || !canvasRef.current) return
+
+    const canvas = canvasRef.current
+
+    // Cancel any ongoing animation before starting a new one
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current)
+      animationRef.current = null
+    }
+
+    // If we don't have a previous histogram, draw immediately and set baseline
+    if (!previousHistogramRef.current) {
+      drawHistogram(canvas, histogram)
+      previousHistogramRef.current = histogram
+      return
+    }
+
+    const startAt = performance.now()
+    const prev = previousHistogramRef.current
+
+    // Spring parameters (critically damped for smooth deceleration)
+    const stiffness = 100 // Spring stiffness
+    const damping = 20 // Critical damping for no oscillation
+    const mass = 1
+    const restDelta = 0.0001
+    const maxMs = 1500
+
+    const springProgress = (tSec: number) => {
+      // Critically damped spring: smooth approach with no oscillation
+      // Using exponential decay with linear term for natural deceleration feel
+      const dampingRatio = damping / (2 * Math.sqrt(stiffness * mass))
+
+      if (dampingRatio >= 1) {
+        // Overdamped or critically damped
+        const w0 = Math.sqrt(stiffness / mass)
+        const zeta = dampingRatio
+        const wd = w0 * Math.sqrt(Math.abs(zeta * zeta - 1))
+
+        if (dampingRatio === 1) {
+          // Critically damped (fastest approach without overshoot)
+          const value = 1 - (1 + w0 * tSec) * Math.exp(-w0 * tSec)
+          return Math.max(0, Math.min(1, value))
+        } else {
+          // Overdamped (slower, more damped)
+          const exp = Math.exp(-zeta * w0 * tSec)
+          const value =
+            1 -
+            exp *
+              (Math.cosh(wd * tSec) + ((zeta * w0) / wd) * Math.sinh(wd * tSec))
+          return Math.max(0, Math.min(1, value))
+        }
+      }
+
+      // Fallback to simple exponential ease-out
+      return 1 - Math.exp(-5 * tSec)
+    }
+
+    const lerpArray = (from: number[], to: number[], p: number) =>
+      from.map((v, i) => v + (to[i] - v) * p)
+
+    const frame = (now: number) => {
+      const elapsedMs = now - startAt
+      const tSec = elapsedMs / 1000
+      const eased = springProgress(tSec)
+
+      const interpolated: CompressedHistogramData = {
+        red: lerpArray(prev.red, histogram.red, eased),
+        green: lerpArray(prev.green, histogram.green, eased),
+        blue: lerpArray(prev.blue, histogram.blue, eased),
+        luminance: lerpArray(prev.luminance, histogram.luminance, eased),
+      }
+
+      drawHistogram(canvas, interpolated)
+
+      const done = Math.abs(1 - eased) < restDelta || elapsedMs >= maxMs
+      if (!done) {
+        animationRef.current = requestAnimationFrame(frame)
+      } else {
+        previousHistogramRef.current = histogram
+        animationRef.current = null
+      }
+    }
+
+    animationRef.current = requestAnimationFrame(frame)
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current)
+        animationRef.current = null
+      }
     }
   }, [histogram])
 
   return (
     <div className={cx('relative grow w-full h-32 group', className)}>
       {loading && (
-        <div className="bg-material-ultra-thin absolute inset-0 flex items-center justify-center rounded-sm backdrop-blur-xl">
+        <div className="bg-material-ultra-thin absolute inset-0 z-10 flex items-center justify-center rounded-sm backdrop-blur-xl">
           <div className="i-mingcute-loading-3-line animate-spin text-xl" />
         </div>
       )}
@@ -273,7 +362,10 @@ export const HistogramChart: FC<{
       {histogram && (
         <canvas
           ref={canvasRef}
-          className="bg-material-ultra-thin ring-fill-tertiary/20 group-hover:ring-fill-tertiary/40 h-full w-full rounded-sm ring-1 backdrop-blur-xl transition-all duration-200"
+          className={clsx(
+            'bg-material-ultra-thin ring-fill-tertiary/20 group-hover:ring-fill-tertiary/40 h-full w-full rounded-sm ring-1 backdrop-blur-xl transition-all duration-200',
+            loading && 'opacity-30',
+          )}
         />
       )}
     </div>

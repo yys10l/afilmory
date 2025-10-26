@@ -5,15 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 import { SUPPORTED_FORMATS } from '../../constants/index.js'
 import { logger } from '../../logger/index.js'
-import type { StorageObject, StorageProvider } from '../interfaces'
-
-export interface LocalConfig {
-  provider: 'local'
-  basePath: string // 本地照片存储的基础路径
-  baseUrl?: string // 用于生成公共 URL 的基础 URL（可选）
-  excludeRegex?: string // 排除文件的正则表达式
-  maxFileLimit?: number // 最大文件数量限制
-}
+import type { LocalConfig, StorageObject, StorageProvider } from '../interfaces'
 
 export interface ScanProgress {
   currentPath: string
@@ -26,13 +18,13 @@ export type ProgressCallback = (progress: ScanProgress) => void
 export class LocalStorageProvider implements StorageProvider {
   private config: LocalConfig
   private basePath: string
+  private distPath?: string
   private scanProgress: ScanProgress = {
     currentPath: '',
     filesScanned: 0,
   }
 
   constructor(config: LocalConfig) {
-    // 参数验证
     if (!config.basePath || config.basePath.trim() === '') {
       throw new Error('LocalStorageProvider: basePath 不能为空')
     }
@@ -61,6 +53,18 @@ export class LocalStorageProvider implements StorageProvider {
       const __dirname = path.dirname(fileURLToPath(import.meta.url))
       const projectRoot = path.resolve(__dirname, '../../../../../')
       this.basePath = path.resolve(projectRoot, config.basePath)
+    }
+
+    // 处理 distPath（可选）
+    if (config.distPath && config.distPath.trim() !== '') {
+      if (path.isAbsolute(config.distPath)) {
+        this.distPath = config.distPath
+      } else {
+        const __dirname = path.dirname(fileURLToPath(import.meta.url))
+        const projectRoot = path.resolve(__dirname, '../../../../../')
+        this.distPath = path.resolve(projectRoot, config.distPath)
+      }
+      copyToDist(this.basePath, this.distPath)
     }
   }
 
@@ -244,7 +248,9 @@ export class LocalStorageProvider implements StorageProvider {
 
       // 如果是图片文件，查找对应的视频文件
       if (SUPPORTED_FORMATS.has(ext)) {
-        const baseName = path.basename(obj.key, ext)
+        // use path.parse to get the name without extension to avoid issues
+        // when the file extension has different casing (e.g. .HEIC)
+        const baseName = path.parse(obj.key).name
         const dirName = path.dirname(obj.key)
 
         // 查找对应的 .mov 文件
@@ -304,5 +310,27 @@ export class LocalStorageProvider implements StorageProvider {
       )
       throw error
     }
+  }
+}
+
+/**
+ * 将文件夹复制到 dist 目录（保持相对路径结构）。
+ */
+async function copyToDist(fromPath: string, distPath: string): Promise<void> {
+  try {
+    // 确保目标目录存在
+    await fs.mkdir(distPath, { recursive: true })
+    await fs.cp(fromPath, distPath, {
+      recursive: true,
+      force: true,
+    })
+
+    logger.main.log(
+      `LocalStorageProvider: 已复制文件到发布目录： ${fromPath} -> ${distPath}`,
+    )
+  } catch (error) {
+    logger.main.error(
+      `LocalStorageProvider: basePath: ${fromPath}, distPath: ${distPath}, 错误: ${error}`,
+    )
   }
 }
