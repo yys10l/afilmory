@@ -39,6 +39,9 @@ export function createS3Client(config: S3Config): S3Client {
     requestChecksumCalculation: 'WHEN_REQUIRED',
     responseChecksumValidation: 'WHEN_REQUIRED',
     endpoint,
+    // Force path-style URLs to prevent DNS errors with Cloudflare R2 and other S3-compatible services
+    // This ensures URLs like https://endpoint/bucket/key instead of bucket.endpoint/key
+    forcePathStyle: true,
     requestHandler: new NodeHttpHandler({
       httpAgent,
       httpsAgent,
