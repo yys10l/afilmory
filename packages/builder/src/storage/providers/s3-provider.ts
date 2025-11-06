@@ -167,41 +167,48 @@ export class S3StorageProvider implements StorageProvider {
     return objects.map((obj) => convertS3ObjectToStorageObject(obj))
   }
 
-  generatePublicUrl(key: string): string {
-    // 如果设置了自定义域名，直接使用自定义域名
-    if (this.config.customDomain) {
-      const customDomain = this.config.customDomain.replace(/\/$/, '') // 移除末尾的斜杠
-      return `${customDomain}/${key}`
-    }
-
-    // 如果使用自定义端点，构建相应的 URL
-    const { endpoint } = this.config
-
-    if (!endpoint) {
-      // 默认 AWS S3 端点
-      return `https://${this.config.bucket}.s3.${this.config.region}.amazonaws.com/${key}`
-    }
-
-    // 检查是否是标准 AWS S3 端点
-    if (endpoint.includes('amazonaws.com')) {
-      return `https://${this.config.bucket}.s3.${this.config.region}.amazonaws.com/${key}`
-    }
-
-    const baseUrl = endpoint.replace(/\/$/, '') // 移除末尾的斜杠
-
-    if (endpoint.includes('aliyuncs.com')) {
-      const protocolEndIndex = baseUrl.indexOf('//')
-      if (protocolEndIndex === -1) {
-        throw new Error('Invalid base URL format')
-      }
-      // 将 bucket 插入到 'https://` 之后，region 之前
-      const prefix = baseUrl.slice(0, protocolEndIndex + 2) // 包括 'https://'
-      const suffix = baseUrl.slice(protocolEndIndex + 2) // 剩余部分
-      return `${prefix}${this.config.bucket}.${suffix}/${key}`
-    }
-    // 对于自定义端点（如 MinIO 等）
-    return `${baseUrl}/${this.config.bucket}/${key}`
+ generatePublicUrl(key: string): string {
+  // 如果设置了自定义域名，直接使用自定义域名
+  if (this.config.customDomain) {
+    const customDomain = this.config.customDomain.replace(/\/$/, '')
+    return `${customDomain}/${key}`
   }
+
+  // 如果使用自定义端点，构建相应的 URL
+  const { endpoint } = this.config
+
+  if (!endpoint) {
+    // 默认 AWS S3 端点
+    return `https://${this.config.bucket}.s3.${this.config.region}.amazonaws.com/${key}`
+  }
+
+  // 检查是否是标准 AWS S3 端点
+  if (endpoint.includes('amazonaws.com')) {
+    return `https://${this.config.bucket}.s3.${this.config.region}.amazonaws.com/${key}`
+  }
+
+  const baseUrl = endpoint.replace(/\/$/, '')
+
+  // Cloudflare R2 逻辑
+  if (endpoint.includes('r2.cloudflarestorage.com')) {
+    // R2 使用 bucket-subdomain 格式: https://bucket.account-id.r2.cloudflarestorage.com/key
+    return `${baseUrl}/${key}`
+  }
+
+  if (endpoint.includes('aliyuncs.com')) {
+    const protocolEndIndex = baseUrl.indexOf('//')
+    if (protocolEndIndex === -1) {
+      throw new Error('Invalid base URL format')
+    }
+    const prefix = baseUrl.slice(0, protocolEndIndex + 2)
+    const suffix = baseUrl.slice(protocolEndIndex + 2)
+    return `${prefix}${this.config.bucket}.${suffix}/${key}`
+  }
+  
+  // 对于其他自定义端点（如 MinIO 等），使用 endpoint/key 格式
+  // 注意：移除了 bucket 部分，因为 Cloudflare R2 endpoint 已经包含了 bucket 信息
+  return `${baseUrl}/${key}`
+}
 
   detectLivePhotos(allObjects: StorageObject[]): Map<string, StorageObject> {
     const livePhotoMap = new Map<string, StorageObject>() // image key -> video object
