@@ -11,7 +11,7 @@ export default defineBuilderConfig(() => ({
     token: env.GIT_TOKEN,
   },
   storage: {
-    // "provider": "local",
+    // "provider": "s3",
     // "basePath": "./apps/web/public/photos",
     // "baseUrl": "/photos"
 
