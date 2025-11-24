@@ -73,6 +73,90 @@ export interface WorkerInitMessage {
   }
 }
 
+/**
+ * 深度过滤对象，移除所有函数和不可序列化的值
+ */
+function makeSerializable(obj: any, seen = new WeakSet()): any {
+  // 处理基本类型
+  if (obj === null || obj === undefined) return obj
+  if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') return obj
+  
+  // 跳过函数
+  if (typeof obj === 'function') return undefined
+  
+  // 防止循环引用
+  if (typeof obj === 'object' && seen.has(obj)) return undefined
+  
+  // 处理数组
+  if (Array.isArray(obj)) {
+    return obj.map(item => makeSerializable(item, seen)).filter(item => item !== undefined)
+  }
+  
+  // 处理 Map
+  if (obj instanceof Map) {
+    const result: Record<string, any> = {}
+    for (const [key, value] of obj.entries()) {
+      const serializedValue = makeSerializable(value, seen)
+      if (serializedValue !== undefined) {
+        result[String(key)] = serializedValue
+      }
+    }
+    return result
+  }
+  
+  // 处理 Set
+  if (obj instanceof Set) {
+    return Array.from(obj).map(item => makeSerializable(item, seen)).filter(item => item !== undefined)
+  }
+  
+  // 处理普通对象
+  if (typeof obj === 'object') {
+    seen.add(obj)
+    const result: Record<string, any> = {}
+    
+    for (const [key, value] of Object.entries(obj)) {
+      // 跳过函数属性
+      if (typeof value === 'function') continue
+      
+      const serializedValue = makeSerializable(value, seen)
+      if (serializedValue !== undefined) {
+        result[key] = serializedValue
+      }
+    }
+    
+    return result
+  }
+  
+  return undefined
+}
+
+/**
+ * 清理 BuilderConfig，移除所有函数和 hooks
+ */
+function sanitizeBuilderConfig(config: BuilderConfig): any {
+  const sanitized = { ...config }
+  
+  // 移除包含函数的字段
+  const fieldsToRemove = [
+    'hooks',
+    'customProcessors',
+    'onTaskCompleted',
+    'beforeBuild',
+    'afterBuild',
+    'beforeProcess',
+    'afterProcess',
+  ]
+  
+  for (const field of fieldsToRemove) {
+    if (field in sanitized) {
+      delete (sanitized as any)[field]
+    }
+  }
+  
+  // 深度清理剩余配置
+  return makeSerializable(sanitized)
+}
+
 // 基于 Node.js cluster 的 Worker 池管理器
 export class ClusterPool<T> extends EventEmitter {
   private concurrency: number
@@ -266,24 +350,41 @@ export class ClusterPool<T> extends EventEmitter {
     if (stats && worker && !this.initializedWorkers.has(workerId)) {
       // 首次准备就绪时发送初始化数据，但不立即标记为 ready
       if (this.sharedData) {
-        // 使用 v8.serialize 序列化数据以保持类型完整性
-        const serializedBuffer = serialize({
-          existingManifestMap: this.sharedData.existingManifestMap,
-          livePhotoMap: this.sharedData.livePhotoMap,
-          imageObjects: this.sharedData.imageObjects,
-          builderConfig: this.sharedData.builderConfig,
-        })
+        try {
+          // 准备可序列化的数据
+          const serializableData = {
+            existingManifestMap: makeSerializable(this.sharedData.existingManifestMap),
+            livePhotoMap: makeSerializable(this.sharedData.livePhotoMap),
+            imageObjects: makeSerializable(this.sharedData.imageObjects),
+            builderConfig: sanitizeBuilderConfig(this.sharedData.builderConfig),
+          }
 
-        // 将 Buffer 转换为数组以通过 IPC 传输
-        const initMessage: WorkerInitMessage = {
-          type: 'init',
-          sharedData: {
-            data: Array.from(serializedBuffer),
-            length: serializedBuffer.length,
-          },
+          // 使用 v8.serialize 序列化数据以保持类型完整性
+          const serializedBuffer = serialize(serializableData)
+
+          // 将 Buffer 转换为数组以通过 IPC 传输
+          const initMessage: WorkerInitMessage = {
+            type: 'init',
+            sharedData: {
+              data: Array.from(serializedBuffer),
+              length: serializedBuffer.length,
+            },
+          }
+          
+          worker.send(initMessage)
+          workerLogger.info(`发送初始化数据到 Worker ${workerId} (${(serializedBuffer.length / 1024).toFixed(2)} KB)`)
+        } catch (error) {
+          workerLogger.error(`序列化初始化数据失败：`, error)
+          // 如果序列化失败，标记 worker 为已准备就绪但不发送数据
+          stats.isReady = true
+          this.readyWorkers.add(workerId)
+          this.emit('workerReady', workerId)
         }
-        worker.send(initMessage)
-        workerLogger.info(`发送初始化数据到 Worker ${workerId}`)
+      } else {
+        // 没有共享数据，直接标记为准备就绪
+        stats.isReady = true
+        this.readyWorkers.add(workerId)
+        this.emit('workerReady', workerId)
       }
 
       this.initializedWorkers.add(workerId)
