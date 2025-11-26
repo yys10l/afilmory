@@ -10,7 +10,7 @@ export const NocturneHero = () => {
   const t = useTranslations('Hero')
 
   return (
-    <section className="relative overflow-hidden rounded-[40px] border border-white/5 bg-linear-to-b from-[#050505] via-[#030303] to-black px-6 py-12 shadow-[0_30px_120px_rgba(0,0,0,0.6)] sm:px-10 sm:py-16">
+    <section className="relative overflow-hidden sm:px-10 sm:py-16">
       <div className="pointer-events-none absolute inset-0 opacity-60">
         <div className="absolute inset-x-12 inset-y-10 rounded-4xl bg-[radial-gradient(circle_at_top,#1a1a1a,transparent_60%)] blur-3xl" />
         <div className="absolute top-6 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-linear-to-br from-white/10 via-white/5 to-transparent blur-[90px]" />
@@ -44,7 +44,7 @@ export const NocturneHero = () => {
         <div className="grid gap-6 lg:grid-cols-[1.35fr,1fr]">
           <div className="mt-4 aspect-4/3 w-full overflow-hidden rounded-2xl border border-white/10">
             <img
-              src="https://github.com/Afilmory/assets/blob/main/afilmory-readme.webp?raw=true"
+              src="https://cdn.jsdelivr.net/gh/Afilmory/assets/afilmory-readme.webp"
               alt={t('preview.imageAlt')}
               className="h-full w-full object-cover"
             />

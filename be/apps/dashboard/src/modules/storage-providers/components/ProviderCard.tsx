@@ -20,6 +20,16 @@ const providerTypeConfig: Record<
     color: 'text-orange-500',
     bgColor: 'bg-orange-500/10',
   },
+  oss: {
+    icon: 'cloud-drizzle',
+    color: 'text-emerald-500',
+    bgColor: 'bg-emerald-500/10',
+  },
+  cos: {
+    icon: 'cloud-snow',
+    color: 'text-cyan-500',
+    bgColor: 'bg-cyan-500/10',
+  },
   b2: {
     icon: 'cloud',
     color: 'text-sky-500',
@@ -65,7 +75,9 @@ export const ProviderCard: FC<ProviderCardProps> = ({ provider, isActive, onEdit
   const getPreviewInfo = () => {
     const cfg = provider.config
     switch (provider.type) {
-      case 's3': {
+      case 's3':
+      case 'oss':
+      case 'cos': {
         return cfg.region || cfg.bucket || t(storageProvidersI18nKeys.card.notConfigured)
       }
       case 'github': {
@@ -134,13 +146,7 @@ export const ProviderCard: FC<ProviderCardProps> = ({ provider, isActive, onEdit
             <span>{t(storageProvidersI18nKeys.card.makeInactive)}</span>
           </Button>
         ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="border-accent/30 bg-accent/10 text-accent hover:bg-accent/20 border"
-            onClick={onToggleActive}
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={onToggleActive}>
             <DynamicIcon name="check" className="h-3.5 w-3.5 mr-1" />
             <span>{t(storageProvidersI18nKeys.card.makeActive)}</span>
           </Button>

@@ -1,9 +1,11 @@
 export const STORAGE_SETTING_KEYS = {
   providers: 'builder.storage.providers',
   activeProvider: 'builder.storage.activeProvider',
+  secureAccess: 'photo.storage.secureAccess',
 } as const satisfies {
   providers: string
   activeProvider: string
+  secureAccess: string
 }
 
 export const MANAGED_STORAGE_ACTIVE_ID = 'managed'
@@ -47,6 +49,12 @@ export const storageProvidersI18nKeys = {
     description: 'storage.providers.security.description',
     helper: 'storage.providers.security.helper',
   },
+  secureAccess: {
+    title: 'storage.providers.secure-access.title',
+    description: 'storage.providers.secure-access.description',
+    helper: 'storage.providers.secure-access.helper',
+    managedNote: 'storage.providers.secure-access.managed-note',
+  },
   modal: {
     createTitle: 'storage.providers.modal.create.title',
     editTitle: 'storage.providers.modal.edit.title',
@@ -75,6 +83,8 @@ export const storageProvidersI18nKeys = {
   },
   types: {
     s3: 'storage.providers.types.s3',
+    oss: 'storage.providers.types.oss',
+    cos: 'storage.providers.types.cos',
     github: 'storage.providers.types.github',
     b2: 'storage.providers.types.b2',
     local: 'storage.providers.types.local',
@@ -120,6 +130,12 @@ export const storageProvidersI18nKeys = {
     description: I18nKeys
     helper: I18nKeys
   }
+  secureAccess: {
+    title: I18nKeys
+    description: I18nKeys
+    helper: I18nKeys
+    managedNote: I18nKeys
+  }
   modal: {
     createTitle: I18nKeys
     editTitle: I18nKeys
@@ -148,6 +164,8 @@ export const storageProvidersI18nKeys = {
   }
   types: {
     s3: I18nKeys
+    oss: I18nKeys
+    cos: I18nKeys
     github: I18nKeys
     b2: I18nKeys
     local: I18nKeys

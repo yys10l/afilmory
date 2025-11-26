@@ -16,8 +16,25 @@ export interface StorageObject {
   etag?: string
 }
 
+export type StorageUploadStatus = 'start' | 'progress' | 'complete' | 'error'
+
+export type StorageUploadProgress = {
+  key: string
+  status: StorageUploadStatus
+  provider?: StorageConfig['provider']
+  size?: number
+  bytesUploaded?: number
+  totalBytes?: number
+  elapsedMs?: number
+  error?: unknown
+  metadata?: Record<string, unknown> | null
+}
+
+export type StorageUploadProgressHandler = (progress: StorageUploadProgress) => Promise<void> | void
+
 export interface StorageUploadOptions {
   contentType?: string
+  onProgress?: StorageUploadProgressHandler
 }
 
 // 存储提供商的通用接口
@@ -79,8 +96,7 @@ export interface StorageProvider {
   moveFile: (sourceKey: string, targetKey: string, options?: StorageUploadOptions) => Promise<StorageObject>
 }
 
-export type S3Config = {
-  provider: 's3'
+type BaseS3LikeConfig = {
   bucket?: string
   region?: string
   endpoint?: string
@@ -103,7 +119,28 @@ export type S3Config = {
   maxAttempts?: number
   // Download concurrency limiter within a single process/worker
   downloadConcurrency?: number
+  /**
+   * Optional override for the SigV4 service name. Defaults to:
+   * - `s3` for AWS or generic S3-compatible endpoints
+   * - `oss` for Aliyun OSS
+   * - `s3` for Tencent COS
+   */
+  sigV4Service?: string
 }
+
+export type S3Config = BaseS3LikeConfig & {
+  provider: 's3'
+}
+
+export type OSSConfig = BaseS3LikeConfig & {
+  provider: 'oss'
+}
+
+export type COSConfig = BaseS3LikeConfig & {
+  provider: 'cos'
+}
+
+export type S3CompatibleConfig = S3Config | OSSConfig | COSConfig
 
 export type B2Config = {
   provider: 'b2'
@@ -215,13 +252,13 @@ export interface CustomStorageConfig {
   [key: string]: unknown
 }
 
-export type RemoteStorageProviderName = 's3' | 'b2' | 'github'
+export type RemoteStorageProviderName = 's3' | 'oss' | 'cos' | 'b2' | 'github'
 export type LocalStorageProviderName = 'eagle' | 'local'
 
-export const REMOTE_STORAGE_PROVIDERS: readonly RemoteStorageProviderName[] = ['s3', 'b2', 'github']
+export const REMOTE_STORAGE_PROVIDERS: readonly RemoteStorageProviderName[] = ['s3', 'oss', 'cos', 'b2', 'github']
 export const LOCAL_STORAGE_PROVIDERS: readonly LocalStorageProviderName[] = ['eagle', 'local']
 
-export type RemoteStorageConfig = S3Config | B2Config | GitHubConfig
+export type RemoteStorageConfig = S3CompatibleConfig | B2Config | GitHubConfig
 export type LocalStorageConfig = EagleConfig | LocalConfig
 
 export type ManagedStorageConfig = {

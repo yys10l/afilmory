@@ -176,6 +176,14 @@
     "description": "Afilmory 致力于为摄影师、策展人和品牌打造沉浸的展示体验。我们以黑色背景延展出一条长廊，观众在其中聆听故事，而非参数。",
     "privacy": "隐私政策",
     "terms": "服务条款",
+    "github": "GitHub",
     "copyright": "© 2025 Afilmory.art"
+  },
+  "GalleryShowcase": {
+    "eyebrow": "已注册画展",
+    "title": "探索已注册的影像空间",
+    "description": "发现其他摄影师和策展人创建的精彩影像档案馆，感受不同的视觉叙事风格。",
+    "error": "加载画展列表时出错，请稍后重试。",
+    "empty": "暂无已注册的画展。"
   }
 }

@@ -1,5 +1,19 @@
 import type { PhotoManifestItem } from '@afilmory/builder'
-import { bigint, boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core'
+import type { ManifestVersion } from '@afilmory/builder/manifest/version'
+import { CURRENT_MANIFEST_VERSION } from '@afilmory/builder/manifest/version'
+import {
+  bigint,
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+} from 'drizzle-orm/pg-core'
 
 import { generateId } from './snowflake'
 
@@ -17,7 +31,7 @@ export const userRoleEnum = pgEnum('user_role', ['user', 'admin', 'superadmin'])
 export const tenantStatusEnum = pgEnum('tenant_status', ['active', 'inactive', 'suspended'])
 export const tenantDomainStatusEnum = pgEnum('tenant_domain_status', ['pending', 'verified', 'disabled'])
 export const photoSyncStatusEnum = pgEnum('photo_sync_status', ['pending', 'synced', 'conflict'])
-export const CURRENT_PHOTO_MANIFEST_VERSION = 'v7' as const
+export const CURRENT_PHOTO_MANIFEST_VERSION: ManifestVersion = CURRENT_MANIFEST_VERSION
 
 export type PhotoAssetConflictType = 'missing-in-storage' | 'metadata-mismatch' | 'photo-id-conflict'
 /**
@@ -40,7 +54,7 @@ export interface PhotoAssetConflictPayload {
 }
 
 export interface PhotoAssetManifest {
-  version: typeof CURRENT_PHOTO_MANIFEST_VERSION
+  version: ManifestVersion
   data: PhotoManifestItem
 }
 
@@ -164,67 +178,6 @@ export const creemSubscriptions = pgTable('creem_subscription', {
   periodStart: timestamp('period_start', { mode: 'string' }),
   periodEnd: timestamp('period_end', { mode: 'string' }),
   cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false).notNull(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
-})
-
-export const tenantAuthUsers = pgTable(
-  'tenant_auth_user',
-  {
-    id: text('id').primaryKey(),
-    tenantId: text('tenant_id')
-      .notNull()
-      .references(() => tenants.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    email: text('email').notNull(),
-    emailVerified: boolean('email_verified').default(false).notNull(),
-    image: text('image'),
-    role: text('role').default('guest').notNull(),
-    createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
-    updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
-    twoFactorEnabled: boolean('two_factor_enabled').default(false).notNull(),
-    username: text('username'),
-    displayUsername: text('display_username'),
-    banned: boolean('banned').default(false).notNull(),
-    banReason: text('ban_reason'),
-    banExpires: timestamp('ban_expires_at', { mode: 'string' }),
-  },
-  (t) => [unique('uq_tenant_auth_user_tenant_email').on(t.tenantId, t.email)],
-)
-
-export const tenantAuthSessions = pgTable('tenant_auth_session', {
-  id: text('id').primaryKey(),
-  tenantId: text('tenant_id')
-    .notNull()
-    .references(() => tenants.id, { onDelete: 'cascade' }),
-  expiresAt: timestamp('expires_at', { mode: 'string' }).notNull(),
-  token: text('token').notNull().unique(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
-  ipAddress: text('ip_address'),
-  userAgent: text('user_agent'),
-  userId: text('user_id')
-    .notNull()
-    .references(() => tenantAuthUsers.id, { onDelete: 'cascade' }),
-})
-
-export const tenantAuthAccounts = pgTable('tenant_auth_account', {
-  id: text('id').primaryKey(),
-  tenantId: text('tenant_id')
-    .notNull()
-    .references(() => tenants.id, { onDelete: 'cascade' }),
-  accountId: text('account_id').notNull(),
-  providerId: text('provider_id').notNull(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => tenantAuthUsers.id, { onDelete: 'cascade' }),
-  accessToken: text('access_token'),
-  refreshToken: text('refresh_token'),
-  idToken: text('id_token'),
-  accessTokenExpiresAt: timestamp('access_token_expires_at', { mode: 'string' }),
-  refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { mode: 'string' }),
-  scope: text('scope'),
-  password: text('password'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 })
@@ -353,6 +306,58 @@ export const photoAssets = pgTable(
   ],
 )
 
+export const photoAccessLogs = pgTable(
+  'photo_access_log',
+  {
+    id: snowflakeId,
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    photoAssetId: text('photo_asset_id')
+      .notNull()
+      .references(() => photoAssets.id, { onDelete: 'cascade' }),
+    photoId: text('photo_id').notNull(),
+    storageKey: text('storage_key').notNull(),
+    provider: text('provider').notNull(),
+    intent: text('intent').notNull().default('original'),
+    tokenId: text('token_id').notNull(),
+    signedUrl: text('signed_url').notNull(),
+    status: text('status').notNull().default('issued'),
+    clientIp: text('client_ip'),
+    userAgent: text('user_agent'),
+    referer: text('referer'),
+    expiresAt: timestamp('expires_at', { mode: 'string' }),
+    createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+  },
+  (t) => [
+    index('idx_photo_access_log_tenant').on(t.tenantId),
+    index('idx_photo_access_log_asset').on(t.photoAssetId),
+    index('idx_photo_access_log_token').on(t.tokenId),
+  ],
+)
+
+export const photoAccessStats = pgTable(
+  'photo_access_stat',
+  {
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    photoAssetId: text('photo_asset_id')
+      .notNull()
+      .references(() => photoAssets.id, { onDelete: 'cascade' }),
+    photoId: text('photo_id').notNull(),
+    viewCount: bigint('view_count', { mode: 'number' }).notNull().default(0),
+    lastViewedAt: timestamp('last_viewed_at', { mode: 'string' }),
+    createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ name: 'pk_photo_access_stat', columns: [t.tenantId, t.photoAssetId] }),
+    index('idx_photo_access_stat_photo').on(t.tenantId, t.photoId),
+  ],
+)
+
 export const photoSyncRuns = pgTable(
   'photo_sync_run',
   {
@@ -402,15 +407,15 @@ export const dbSchema = {
   authAccounts,
   authVerifications,
   creemSubscriptions,
-  tenantAuthUsers,
-  tenantAuthSessions,
-  tenantAuthAccounts,
+
   settings,
   systemSettings,
   reactions,
   managedStorageUsages,
   managedStorageFileReferences,
   photoAssets,
+  photoAccessLogs,
+  photoAccessStats,
   photoSyncRuns,
   billingUsageEvents,
 }
