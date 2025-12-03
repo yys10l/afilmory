@@ -17,6 +17,7 @@ const TENANT_MISSING_ERROR_CODES = new Set([AUTH_TENANT_NOT_FOUND_ERROR_CODE, TE
 const {
   LOGIN: DEFAULT_LOGIN_PATH,
   ROOT_LOGIN: ROOT_LOGIN_PATH,
+  WELCOME: WELCOME_PATH,
   TENANT_MISSING: TENANT_MISSING_PATH,
   DEFAULT_AUTHENTICATED: DEFAULT_AUTHENTICATED_PATH,
   SUPERADMIN_ROOT: SUPERADMIN_ROOT_PATH,
@@ -95,12 +96,6 @@ export function usePageRedirect() {
   }, [sessionQuery.data, setAuthUser])
 
   useEffect(() => {
-    return () => {
-      queryClient.cancelQueries({ queryKey: AUTH_SESSION_QUERY_KEY })
-    }
-  }, [queryClient])
-
-  useEffect(() => {
     const matchedTenantNotFound = [sessionQuery.error].some((error) => {
       const code = extractBizErrorCode(error)
       return code !== null && TENANT_MISSING_ERROR_CODES.has(code)
@@ -132,11 +127,26 @@ export function usePageRedirect() {
     const isSuperAdmin = session?.user.role === 'superadmin'
     const isOnSuperAdminPage = pathname.startsWith(SUPERADMIN_ROOT_PATH)
     const isOnRootLoginPage = pathname === ROOT_LOGIN_PATH
+    const tenant = session?.tenant ?? null
+    const isTenantPending = Boolean(session && tenant?.isPlaceholder)
+    const isOnWelcomePage = pathname === WELCOME_PATH
 
     if (session && isSuperAdmin) {
       if (!isOnSuperAdminPage || pathname === DEFAULT_LOGIN_PATH || isOnRootLoginPage) {
         navigate(SUPERADMIN_DEFAULT_PATH, { replace: true })
       }
+      return
+    }
+
+    if (session && isTenantPending) {
+      if (!isOnWelcomePage) {
+        navigate(WELCOME_PATH, { replace: true })
+      }
+      return
+    }
+
+    if (session && !isTenantPending && isOnWelcomePage) {
+      navigate(DEFAULT_AUTHENTICATED_PATH, { replace: true })
       return
     }
 
@@ -151,7 +161,8 @@ export function usePageRedirect() {
     }
 
     if (session && (pathname === DEFAULT_LOGIN_PATH || pathname === ROOT_LOGIN_PATH)) {
-      navigate(DEFAULT_AUTHENTICATED_PATH, { replace: true })
+      const destination = isTenantPending ? WELCOME_PATH : DEFAULT_AUTHENTICATED_PATH
+      navigate(destination, { replace: true })
     }
   }, [location, location.pathname, navigate, sessionQuery.data, sessionQuery.isError, sessionQuery.isPending])
 

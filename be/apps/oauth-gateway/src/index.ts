@@ -1,8 +1,9 @@
+import { decodeGatewayState } from '@afilmory/be-utils'
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 
 import { gatewayConfig } from './config'
-import { buildForwardLocation, resolveTargetHost, sanitizeExplicitHost, sanitizeTenantSlug } from './resolver'
+import { buildForwardLocation, resolveTargetHost, sanitizeTenantSlug } from './resolver'
 
 const app = new Hono()
 
@@ -18,30 +19,51 @@ const callbackRouter = new Hono()
 
 callbackRouter.all('/:provider', (c) => {
   const provider = c.req.param('provider')
+  const requestUrl = new URL(c.req.url)
+  const stateParam = requestUrl.searchParams.get('state')
+
   if (!provider) {
+    console.warn('[oauth-gateway:callback] Missing provider param', {
+      path: c.req.path,
+      queryParams: Object.fromEntries(requestUrl.searchParams),
+    })
     return c.json({ error: 'missing_provider', message: 'Provider param is required.' }, 400)
   }
 
-  const requestUrl = new URL(c.req.url)
-  const tenantSlugParam = requestUrl.searchParams.get('tenantSlug') ?? requestUrl.searchParams.get('tenant')
-  const explicitHostParam = requestUrl.searchParams.get('targetHost')
-  const tenantSlug = sanitizeTenantSlug(tenantSlugParam)
-  const explicitHost = sanitizeExplicitHost(explicitHostParam)
+  const decodedState =
+    gatewayConfig.stateSecret && stateParam
+      ? decodeGatewayState(stateParam, { secret: gatewayConfig.stateSecret })
+      : null
 
-  requestUrl.searchParams.delete('tenant')
-  requestUrl.searchParams.delete('tenantSlug')
-  requestUrl.searchParams.delete('targetHost')
-
-  if (tenantSlugParam && !tenantSlug) {
-    return c.json({ error: 'invalid_tenant', message: 'Tenant slug is invalid.' }, 400)
+  if (stateParam && gatewayConfig.stateSecret && !decodedState) {
+    console.error('[oauth-gateway:callback] Invalid or expired state', {
+      provider,
+      stateLength: stateParam.length,
+      statePrefix: `${stateParam.slice(0, 20)}...`,
+    })
+    return c.json({ error: 'invalid_state', message: 'OAuth state is invalid or expired.' }, 400)
   }
 
-  if (explicitHostParam && !explicitHost) {
-    return c.json({ error: 'invalid_host', message: 'Target host is invalid.' }, 400)
+  if (decodedState?.innerState) {
+    requestUrl.searchParams.set('state', decodedState.innerState)
+    console.info('[oauth-gateway:callback] Replaced state with innerState', {
+      provider,
+      innerStateLength: decodedState.innerState.length,
+    })
   }
 
-  const targetHost = resolveTargetHost(gatewayConfig, { tenantSlug, explicitHost })
+  const tenantSlug = sanitizeTenantSlug(decodedState?.tenantSlug ?? undefined) ?? decodedState?.tenantSlug ?? null
+
+  const targetHost = resolveTargetHost(gatewayConfig, {
+    tenantSlug,
+  })
+
   if (!targetHost) {
+    console.error('[oauth-gateway:callback] Unable to resolve target host', {
+      provider,
+      tenantSlug,
+      baseDomain: gatewayConfig.baseDomain,
+    })
     return c.json({ error: 'unresolvable_host', message: 'Unable to resolve target tenant host.' }, 400)
   }
 

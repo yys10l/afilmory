@@ -148,11 +148,6 @@ const zhCnUiSchema = {
                 title: 'GitHub',
                 helper: '支持完整链接或用户名。',
               },
-              rss: {
-                title: '生成 RSS 订阅源',
-                description: '启用后将在前台站点暴露 RSS 订阅入口。',
-                helper: '开启后访客可通过 RSS 订阅最新照片。',
-              },
             },
           },
         },
@@ -455,6 +450,12 @@ const zhCnUiSchema = {
             label: '仓库路径',
             description: '可选，限制同步的仓库路径。',
             placeholder: 'public/photos（可选）',
+          },
+          'custom-domain': {
+            label: '自定义 CDN 域名',
+            description: '用于生成公开链接的 CDN 或代理域名。',
+            placeholder: 'cdn.jsdelivr.net/gh/owner/repo@branch（示例）',
+            helper: '留空则继续使用 raw.githubusercontent.com。',
           },
           'use-raw': {
             label: '使用 raw 链接',

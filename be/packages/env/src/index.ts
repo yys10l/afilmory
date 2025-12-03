@@ -22,10 +22,15 @@ export const env = createEnv({
     GITHUB_CLIENT_SECRET: z.string().optional(),
 
     CONFIG_ENCRYPTION_KEY: z.string().min(1),
+    AUTH_GATEWAY_STATE_SECRET: z.string().min(1).optional(),
 
     // Payment
     CREEM_API_KEY: z.string().min(1),
     CREEM_WEBHOOK_SECRET: z.string().min(1),
+
+    // Mail
+    RESEND_API_KEY: z.string().min(1).optional(),
+    RESEND_FROM: z.string().min(1).default('AFILMORY <notification@afilmory.art>'),
 
     DEFAULT_SUPERADMIN_EMAIL: z.email().default('root@local.host'),
     DEFAULT_SUPERADMIN_USERNAME: z

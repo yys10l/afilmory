@@ -1,7 +1,7 @@
 import type { PhotoManifestItem } from '@afilmory/builder'
 
 const GENERATOR_NAME = 'Afilmory Feed Generator'
-const EXIF_NAMESPACE = 'https://afilmory.com/rss/exif'
+const EXIF_NAMESPACE = 'https://afilmory.art/rss/exif'
 const PROTOCOL_VERSION = '1.1'
 const PROTOCOL_ID = 'afilmory-rss-exif'
 
@@ -103,10 +103,12 @@ function buildExifTags(photo: PhotoManifestItem): string {
       } else {
         ss = `${exif.ExposureTime}s`
       }
-    } else if (!ss.endsWith('s') && // If it's a string and doesn't end with s, append it?
+    } else if (
+      !ss.endsWith('s') && // If it's a string and doesn't end with s, append it?
       // Actually exiftool usually gives nice strings or numbers.
       // Let's just trust the value but ensure 's' suffix if it looks like a number
-      !Number.isNaN(Number(ss))) {
+      !Number.isNaN(Number(ss))
+    ) {
       ss = `${ss}s`
     }
     tags.push(`<exif:shutterSpeed>${ss}</exif:shutterSpeed>`)

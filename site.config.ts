@@ -39,14 +39,13 @@ interface Author {
 interface Social {
   twitter?: string
   github?: string
-  rss?: boolean
 }
 
 const defaultConfig: SiteConfig = {
   name: 'New Afilmory',
   title: 'New Afilmory',
   description: 'A modern photo gallery website.',
-  url: 'https://afilmory.com',
+  url: 'https://afilmory.art',
   accentColor: '#007bff',
   author: {
     name: 'Afilmory',

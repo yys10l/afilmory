@@ -112,7 +112,7 @@ export class PhotoStorageService {
     }
   }
 
-  private mapProviderToStorageConfig(provider: BuilderStorageProvider): StorageConfig {
+  mapProviderToStorageConfig(provider: BuilderStorageProvider): StorageConfig {
     this.assertProviderSupported(provider.type)
 
     const config = provider.config ?? {}
@@ -191,6 +191,8 @@ export class PhotoStorageService {
         if (pathValue) result.path = pathValue
         const useRawUrl = parseBoolean(config.useRawUrl)
         if (typeof useRawUrl === 'boolean') result.useRawUrl = useRawUrl
+        const customDomain = normalizeStringToUndefined(config.customDomain)
+        if (customDomain) result.customDomain = customDomain
 
         return result
       }
