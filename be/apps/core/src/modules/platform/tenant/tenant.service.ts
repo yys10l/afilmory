@@ -115,8 +115,20 @@ export class TenantService {
     await this.repository.deleteById(id)
   }
 
-  async listTenants(): Promise<TenantAggregate[]> {
-    return await this.repository.listTenants()
+  async listTenants(options?: {
+    page?: number
+    limit?: number
+    status?: TenantRecord['status']
+    sortBy?: 'createdAt' | 'name'
+    sortDir?: 'asc' | 'desc'
+  }): Promise<{ items: TenantAggregate[]; total: number }> {
+    return await this.repository.listTenants({
+      page: options?.page ?? 1,
+      limit: options?.limit ?? 20,
+      status: options?.status,
+      sortBy: options?.sortBy,
+      sortDir: options?.sortDir,
+    })
   }
 
   async setBanned(id: string, banned: boolean): Promise<void> {
@@ -130,7 +142,11 @@ export class TenantService {
     }
 
     const existing = await this.repository.findBySlug(normalized)
-    return existing === null
+    if (!existing) {
+      return true
+    }
+
+    return existing.tenant.status === 'pending'
   }
 
   ensureTenantIsActive(tenant: TenantAggregate['tenant'], options?: { allowPending?: boolean }): void {

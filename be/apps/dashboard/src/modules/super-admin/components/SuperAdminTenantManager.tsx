@@ -1,13 +1,20 @@
-import { Button, Modal, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@afilmory/ui'
+import { Button, Modal, Prompt, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@afilmory/ui'
 import { Spring } from '@afilmory/utils'
-import { RefreshCcwIcon } from 'lucide-react'
+import { ArrowDownIcon, ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, RefreshCcwIcon } from 'lucide-react'
 import { m } from 'motion/react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { LinearBorderPanel } from '~/components/common/LinearBorderPanel'
+import { getRequestErrorMessage } from '~/lib/errors'
 
-import { useSuperAdminTenantsQuery, useUpdateTenantBanMutation, useUpdateTenantPlanMutation } from '../hooks'
+import {
+  useDeleteTenantMutation,
+  useSuperAdminTenantsQuery,
+  useUpdateTenantBanMutation,
+  useUpdateTenantPlanMutation,
+} from '../hooks'
 import type { BillingPlanDefinition, SuperAdminTenantSummary } from '../types'
 import { TenantDetailModal } from './TenantDetailModal'
 import { TenantUsageCell } from './TenantUsageCell'
@@ -18,9 +25,22 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
 })
 
 export function SuperAdminTenantManager() {
-  const tenantsQuery = useSuperAdminTenantsQuery()
+  const [page, setPage] = useState(1)
+  const [limit] = useState(10)
+  const [status, setStatus] = useState<string>('all')
+  const [sortBy, setSortBy] = useState<string>('createdAt')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const tenantsQuery = useSuperAdminTenantsQuery({
+    page,
+    limit,
+    status: status === 'all' ? undefined : status,
+    sortBy,
+    sortDir,
+  })
   const updatePlanMutation = useUpdateTenantPlanMutation()
   const updateBanMutation = useUpdateTenantBanMutation()
+  const deleteTenantMutation = useDeleteTenantMutation()
   const { t } = useTranslation()
 
   const { isLoading } = tenantsQuery
@@ -29,6 +49,17 @@ export function SuperAdminTenantManager() {
 
   const plans = data?.plans ?? []
   const tenants = data?.tenants ?? []
+  const total = data?.total ?? 0
+  const totalPages = Math.ceil(total / limit)
+
+  const handleSort = (field: string) => {
+    if (sortBy === field) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(field)
+      setSortDir('asc')
+    }
+  }
 
   const handlePlanChange = (tenant: SuperAdminTenantSummary, planId: string) => {
     if (planId === tenant.planId) {
@@ -76,6 +107,40 @@ export function SuperAdminTenantManager() {
   const isBanUpdating = (tenantId: string) =>
     updateBanMutation.isPending && updateBanMutation.variables?.tenantId === tenantId
 
+  const isDeleting = (tenantId: string) => deleteTenantMutation.isPending && deleteTenantMutation.variables === tenantId
+
+  const handleDeleteTenant = (tenant: SuperAdminTenantSummary) => {
+    const requiredSlug = tenant.slug.trim()
+
+    Prompt.input({
+      title: t('superadmin.tenants.prompt.delete.title'),
+      description: t('superadmin.tenants.prompt.delete.description', { name: tenant.name }),
+      placeholder: t('superadmin.tenants.prompt.delete.placeholder', { slug: requiredSlug }),
+      variant: 'danger',
+      onConfirmText: t('superadmin.tenants.prompt.delete.confirm'),
+      onCancelText: t('superadmin.tenants.prompt.delete.cancel'),
+      onConfirm: (input) => {
+        const normalized = input.trim()
+        if (normalized !== requiredSlug) {
+          toast.error(t('superadmin.tenants.prompt.delete.mismatch'), {
+            description: t('superadmin.tenants.prompt.delete.placeholder', { slug: requiredSlug }),
+          })
+          return
+        }
+
+        deleteTenantMutation.mutate(tenant.id, {
+          onSuccess: () => {
+            toast.success(t('superadmin.tenants.toast.delete-success', { name: tenant.name }))
+          },
+          onError: (error) => {
+            const description = getRequestErrorMessage(error, t('common.retry-later'))
+            toast.error(t('superadmin.tenants.toast.delete-error'), { description })
+          },
+        })
+      },
+    })
+  }
+
   if (isError) {
     return (
       <LinearBorderPanel className="p-6 text-sm text-red">
@@ -90,9 +155,34 @@ export function SuperAdminTenantManager() {
     return <TenantSkeleton />
   }
 
+  const SortIcon = ({ field }: { field: string }) => {
+    if (sortBy !== field) return null
+    return sortDir === 'asc' ? <ArrowUpIcon className="size-3 ml-1" /> : <ArrowDownIcon className="size-3 ml-1" />
+  }
+
   return (
     <m.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={Spring.presets.smooth}>
-      <header className="flex items-center justify-end gap-3">
+      <header className="flex items-center justify-between gap-3 mb-4">
+        <div className="w-[200px]">
+          <Select
+            value={status}
+            onValueChange={(val) => {
+              setStatus(val)
+              setPage(1)
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={t('superadmin.tenants.filter.status')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('superadmin.tenants.filter.all')}</SelectItem>
+              <SelectItem value="active">{t('superadmin.tenants.status.active')}</SelectItem>
+              <SelectItem value="inactive">{t('superadmin.tenants.status.inactive')}</SelectItem>
+              <SelectItem value="suspended">{t('superadmin.tenants.status.suspended')}</SelectItem>
+              <SelectItem value="pending">{t('superadmin.tenants.status.pending')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Button
           type="button"
           variant="ghost"
@@ -108,7 +198,7 @@ export function SuperAdminTenantManager() {
         </Button>
       </header>
 
-      <LinearBorderPanel className="p-6 bg-background-secondary mt-4">
+      <LinearBorderPanel className="p-6 bg-background-secondary">
         {tenants.length === 0 ? (
           <p className="text-text-secondary text-sm">{t('superadmin.tenants.empty')}</p>
         ) : (
@@ -116,12 +206,29 @@ export function SuperAdminTenantManager() {
             <table className="min-w-full divide-y divide-border/40 text-sm">
               <thead>
                 <tr className="text-text-tertiary text-xs uppercase tracking-wide">
-                  <th className="px-3 py-2 text-left">{t('superadmin.tenants.table.tenant')}</th>
+                  <th
+                    className="px-3 py-2 text-left cursor-pointer hover:text-text select-none"
+                    onClick={() => handleSort('name')}
+                  >
+                    <div className="flex items-center">
+                      {t('superadmin.tenants.table.tenant')}
+                      <SortIcon field="name" />
+                    </div>
+                  </th>
                   <th className="px-3 py-2 text-left">{t('superadmin.tenants.table.plan')}</th>
                   <th className="px-3 py-2 text-left">{t('superadmin.tenants.table.usage')}</th>
                   <th className="px-3 py-2 text-center">{t('superadmin.tenants.table.status')}</th>
                   <th className="px-3 py-2 text-center">{t('superadmin.tenants.table.ban')}</th>
-                  <th className="px-3 py-2 text-left">{t('superadmin.tenants.table.created')}</th>
+                  <th
+                    className="px-3 py-2 text-left cursor-pointer hover:text-text select-none"
+                    onClick={() => handleSort('createdAt')}
+                  >
+                    <div className="flex items-center">
+                      {t('superadmin.tenants.table.created')}
+                      <SortIcon field="createdAt" />
+                    </div>
+                  </th>
+                  <th className="px-3 py-2 text-right">{t('superadmin.tenants.table.actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/20">
@@ -176,10 +283,52 @@ export function SuperAdminTenantManager() {
                     <td className="px-3 py-3 align-top text-text-secondary text-xs">
                       {formatDateLabel(tenant.createdAt)}
                     </td>
+                    <td className="px-3 py-2 align-top text-right">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        disabled={isDeleting(tenant.id)}
+                        onClick={() => handleDeleteTenant(tenant)}
+                      >
+                        {isDeleting(tenant.id)
+                          ? t('superadmin.tenants.button.processing')
+                          : t('superadmin.tenants.button.delete')}
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+
+            <div className="flex items-center justify-between mt-6 border-t border-border/40 pt-4">
+              <div className="text-xs text-text-tertiary">
+                {t('superadmin.tenants.pagination.showing', {
+                  start: (page - 1) * limit + 1,
+                  end: Math.min(page * limit, total),
+                  total,
+                })}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  className="size-8"
+                  disabled={page <= 1 || tenantsQuery.isFetching}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  <ChevronLeftIcon className="size-4" />
+                </Button>
+                <div className="text-sm text-text-secondary font-medium">
+                  {page} / {totalPages || 1}
+                </div>
+                <Button
+                  className="size-8"
+                  disabled={page >= totalPages || tenantsQuery.isFetching}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  <ChevronRightIcon className="size-4" />
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </LinearBorderPanel>
@@ -248,6 +397,7 @@ function StatusBadge({ status, banned }: { status: SuperAdminTenantSummary['stat
       </span>
     )
   }
+
   return (
     <span className="bg-slate-500/10 text-slate-400 rounded-full px-2 py-0.5 text-xs">
       {t('superadmin.tenants.status.inactive')}

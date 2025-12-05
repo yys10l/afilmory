@@ -1,5 +1,5 @@
 import { photoAssets } from '@afilmory/db'
-import { Body, Controller, Get, Param, Patch, Query } from '@afilmory/framework'
+import { Body, Controller, Delete, Get, Param, Patch, Query } from '@afilmory/framework'
 import { DbAccessor } from 'core/database/database.provider'
 import { Roles } from 'core/guards/roles.decorator'
 import { BypassResponseTransform } from 'core/interceptors/response-transform.decorator'
@@ -9,6 +9,7 @@ import { TenantService } from 'core/modules/platform/tenant/tenant.service'
 import { desc, eq } from 'drizzle-orm'
 
 import type { BillingPlanId } from '../billing/billing-plan.types'
+import { DataManagementService } from '../data-management/data-management.service'
 import { UpdateTenantBanDto, UpdateTenantPlanDto } from './super-admin.dto'
 
 @Controller('super-admin/tenants')
@@ -17,6 +18,7 @@ import { UpdateTenantBanDto, UpdateTenantPlanDto } from './super-admin.dto'
 export class SuperAdminTenantController {
   constructor(
     private readonly tenantService: TenantService,
+    private readonly dataManagementService: DataManagementService,
     private readonly billingPlanService: BillingPlanService,
     private readonly billingUsageService: BillingUsageService,
     private readonly db: DbAccessor,
@@ -41,11 +43,25 @@ export class SuperAdminTenantController {
   }
 
   @Get('/')
-  async listTenants() {
-    const [tenantAggregates, plans] = await Promise.all([
-      this.tenantService.listTenants(),
+  async listTenants(
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+    @Query('status') status?: string,
+    @Query('sortBy') sortBy?: 'createdAt' | 'name',
+    @Query('sortDir') sortDir?: 'asc' | 'desc',
+  ) {
+    const [tenantResult, plans] = await Promise.all([
+      this.tenantService.listTenants({
+        page: Number(page),
+        limit: Number(limit),
+        status: status as any,
+        sortBy,
+        sortDir,
+      }),
       Promise.resolve(this.billingPlanService.getPlanDefinitions()),
     ])
+
+    const { items: tenantAggregates, total } = tenantResult
 
     const tenantIds = tenantAggregates.map((aggregate) => aggregate.tenant.id)
     const usageTotalsMap = await this.billingUsageService.getUsageTotalsForTenants(tenantIds)
@@ -56,6 +72,7 @@ export class SuperAdminTenantController {
         usageTotals: usageTotalsMap[aggregate.tenant.id] ?? [],
       })),
       plans,
+      total,
     }
   }
 
@@ -69,5 +86,10 @@ export class SuperAdminTenantController {
   async updateTenantBan(@Param('tenantId') tenantId: string, @Body() dto: UpdateTenantBanDto) {
     await this.tenantService.setBanned(tenantId, dto.banned)
     return { updated: true }
+  }
+
+  @Delete('/:tenantId')
+  async deleteTenant(@Param('tenantId') tenantId: string) {
+    return await this.dataManagementService.deleteTenantAccountById(tenantId)
   }
 }

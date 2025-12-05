@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  deleteSuperAdminTenant,
   fetchSuperAdminSettings,
   fetchSuperAdminTenantPhotos,
   fetchSuperAdminTenants,
@@ -10,6 +11,7 @@ import {
 } from './api'
 import type {
   SuperAdminSettingsResponse,
+  SuperAdminTenantListParams,
   SuperAdminTenantListResponse,
   SuperAdminTenantPhotosResponse,
   UpdateSuperAdminSettingsPayload,
@@ -28,10 +30,11 @@ export function useSuperAdminSettingsQuery() {
   })
 }
 
-export function useSuperAdminTenantsQuery() {
+export function useSuperAdminTenantsQuery(params?: SuperAdminTenantListParams) {
   return useQuery<SuperAdminTenantListResponse>({
-    queryKey: SUPER_ADMIN_TENANTS_QUERY_KEY,
-    queryFn: fetchSuperAdminTenants,
+    queryKey: [...SUPER_ADMIN_TENANTS_QUERY_KEY, params],
+    queryFn: () => fetchSuperAdminTenants(params),
+    placeholderData: (previousData) => previousData,
   })
 }
 
@@ -70,6 +73,19 @@ export function useUpdateTenantBanMutation() {
   return useMutation({
     mutationFn: async (payload: UpdateTenantBanPayload) => {
       await updateSuperAdminTenantBan(payload)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: SUPER_ADMIN_TENANTS_QUERY_KEY })
+    },
+  })
+}
+
+export function useDeleteTenantMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (tenantId: string) => {
+      await deleteSuperAdminTenant(tenantId)
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: SUPER_ADMIN_TENANTS_QUERY_KEY })
