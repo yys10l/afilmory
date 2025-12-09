@@ -13,6 +13,7 @@ import type {
   UpdateSuperAdminSettingsPayload,
   UpdateTenantBanPayload,
   UpdateTenantPlanPayload,
+  UpdateTenantStoragePlanPayload,
 } from './types'
 
 const SUPER_ADMIN_SETTINGS_ENDPOINT = '/super-admin/settings'
@@ -47,6 +48,7 @@ export async function fetchSuperAdminTenants(
   if (params) {
     if (params.page) query.set('page', String(params.page))
     if (params.limit) query.set('limit', String(params.limit))
+    if (params.search) query.set('search', params.search)
     if (params.status) query.set('status', params.status)
     if (params.sortBy) query.set('sortBy', params.sortBy)
     if (params.sortDir) query.set('sortDir', params.sortDir)
@@ -65,6 +67,13 @@ export async function updateSuperAdminTenantPlan(payload: UpdateTenantPlanPayloa
   await coreApi(`${SUPER_ADMIN_TENANTS_ENDPOINT}/${payload.tenantId}/plan`, {
     method: 'PATCH',
     body: { planId: payload.planId },
+  })
+}
+
+export async function updateSuperAdminTenantStoragePlan(payload: UpdateTenantStoragePlanPayload): Promise<void> {
+  await coreApi(`${SUPER_ADMIN_TENANTS_ENDPOINT}/${payload.tenantId}/storage-plan`, {
+    method: 'PATCH',
+    body: { storagePlanId: payload.storagePlanId },
   })
 }
 

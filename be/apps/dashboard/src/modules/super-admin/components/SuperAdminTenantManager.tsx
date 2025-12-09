@@ -1,21 +1,33 @@
-import { Button, Modal, Prompt, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@afilmory/ui'
+import {
+  Button,
+  Input,
+  Modal,
+  Prompt,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@afilmory/ui'
 import { Spring } from '@afilmory/utils'
-import { ArrowDownIcon, ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, RefreshCcwIcon } from 'lucide-react'
+import { ArrowDownIcon, ArrowUpIcon, ChevronLeftIcon, ChevronRightIcon, RefreshCcwIcon, SearchIcon } from 'lucide-react'
 import { m } from 'motion/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { LinearBorderPanel } from '~/components/common/LinearBorderPanel'
 import { getRequestErrorMessage } from '~/lib/errors'
+import { buildTenantUrl } from '~/modules/auth/utils/domain'
 
 import {
   useDeleteTenantMutation,
   useSuperAdminTenantsQuery,
   useUpdateTenantBanMutation,
   useUpdateTenantPlanMutation,
+  useUpdateTenantStoragePlanMutation,
 } from '../hooks'
-import type { BillingPlanDefinition, SuperAdminTenantSummary } from '../types'
+import type { BillingPlanDefinition, StoragePlanDefinition, SuperAdminTenantSummary } from '../types'
 import { TenantDetailModal } from './TenantDetailModal'
 import { TenantUsageCell } from './TenantUsageCell'
 
@@ -30,15 +42,27 @@ export function SuperAdminTenantManager() {
   const [status, setStatus] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('createdAt')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
 
   const tenantsQuery = useSuperAdminTenantsQuery({
     page,
     limit,
+    search: debouncedSearch,
     status: status === 'all' ? undefined : status,
     sortBy,
     sortDir,
   })
   const updatePlanMutation = useUpdateTenantPlanMutation()
+  const updateStoragePlanMutation = useUpdateTenantStoragePlanMutation()
   const updateBanMutation = useUpdateTenantBanMutation()
   const deleteTenantMutation = useDeleteTenantMutation()
   const { t } = useTranslation()
@@ -48,6 +72,7 @@ export function SuperAdminTenantManager() {
   const { data } = tenantsQuery
 
   const plans = data?.plans ?? []
+  const storagePlans = data?.storagePlans ?? []
   const tenants = data?.tenants ?? []
   const total = data?.total ?? 0
   const totalPages = Math.ceil(total / limit)
@@ -80,6 +105,26 @@ export function SuperAdminTenantManager() {
     )
   }
 
+  const handleStoragePlanChange = (tenant: SuperAdminTenantSummary, storagePlanId: string | null) => {
+    const nextId = storagePlanId === 'default' ? null : storagePlanId
+    if (nextId === tenant.storagePlanId) {
+      return
+    }
+    updateStoragePlanMutation.mutate(
+      { tenantId: tenant.id, storagePlanId: nextId },
+      {
+        onSuccess: () => {
+          toast.success(t('superadmin.tenants.toast.storage-plan-success', { name: tenant.name }))
+        },
+        onError: (error) => {
+          toast.error(t('superadmin.tenants.toast.storage-plan-error'), {
+            description: error instanceof Error ? error.message : t('common.retry-later'),
+          })
+        },
+      },
+    )
+  }
+
   const handleToggleBanned = (tenant: SuperAdminTenantSummary) => {
     const next = !tenant.banned
     updateBanMutation.mutate(
@@ -103,6 +148,9 @@ export function SuperAdminTenantManager() {
 
   const isPlanUpdating = (tenantId: string) =>
     updatePlanMutation.isPending && updatePlanMutation.variables?.tenantId === tenantId
+
+  const isStoragePlanUpdating = (tenantId: string) =>
+    updateStoragePlanMutation.isPending && updateStoragePlanMutation.variables?.tenantId === tenantId
 
   const isBanUpdating = (tenantId: string) =>
     updateBanMutation.isPending && updateBanMutation.variables?.tenantId === tenantId
@@ -163,25 +211,36 @@ export function SuperAdminTenantManager() {
   return (
     <m.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={Spring.presets.smooth}>
       <header className="flex items-center justify-between gap-3 mb-4">
-        <div className="w-[200px]">
-          <Select
-            value={status}
-            onValueChange={(val) => {
-              setStatus(val)
-              setPage(1)
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder={t('superadmin.tenants.filter.status')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('superadmin.tenants.filter.all')}</SelectItem>
-              <SelectItem value="active">{t('superadmin.tenants.status.active')}</SelectItem>
-              <SelectItem value="inactive">{t('superadmin.tenants.status.inactive')}</SelectItem>
-              <SelectItem value="suspended">{t('superadmin.tenants.status.suspended')}</SelectItem>
-              <SelectItem value="pending">{t('superadmin.tenants.status.pending')}</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-3">
+          <div className="w-[200px]">
+            <Select
+              value={status}
+              onValueChange={(val) => {
+                setStatus(val)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t('superadmin.tenants.filter.status')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('superadmin.tenants.filter.all')}</SelectItem>
+                <SelectItem value="active">{t('superadmin.tenants.status.active')}</SelectItem>
+                <SelectItem value="inactive">{t('superadmin.tenants.status.inactive')}</SelectItem>
+                <SelectItem value="suspended">{t('superadmin.tenants.status.suspended')}</SelectItem>
+                <SelectItem value="pending">{t('superadmin.tenants.status.pending')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-[240px] relative">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-text-tertiary pointer-events-none" />
+            <Input
+              className="pl-9"
+              placeholder={t('superadmin.tenants.search.placeholder')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
         <Button
           type="button"
@@ -216,9 +275,9 @@ export function SuperAdminTenantManager() {
                     </div>
                   </th>
                   <th className="px-3 py-2 text-left">{t('superadmin.tenants.table.plan')}</th>
+                  <th className="px-3 py-2 text-left">{t('superadmin.tenants.table.storage-plan')}</th>
                   <th className="px-3 py-2 text-left">{t('superadmin.tenants.table.usage')}</th>
                   <th className="px-3 py-2 text-center">{t('superadmin.tenants.table.status')}</th>
-                  <th className="px-3 py-2 text-center">{t('superadmin.tenants.table.ban')}</th>
                   <th
                     className="px-3 py-2 text-left cursor-pointer hover:text-text select-none"
                     onClick={() => handleSort('createdAt')}
@@ -235,7 +294,16 @@ export function SuperAdminTenantManager() {
                 {tenants.map((tenant) => (
                   <tr key={tenant.id}>
                     <td className="px-3 py-3 align-top">
-                      <div className="font-medium text-text">{tenant.name}</div>
+                      <div className="font-medium text-text">
+                        <a
+                          href={buildTenantUrl(tenant.slug)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          {tenant.name}
+                        </a>
+                      </div>
                       <div className="text-text-secondary text-xs">{tenant.slug}</div>
                     </td>
                     <td className="px-3 py-3 align-top">
@@ -244,6 +312,14 @@ export function SuperAdminTenantManager() {
                         plans={plans}
                         disabled={isPlanUpdating(tenant.id)}
                         onChange={(nextPlan) => handlePlanChange(tenant, nextPlan)}
+                      />
+                    </td>
+                    <td className="px-3 py-3 align-top">
+                      <StoragePlanSelector
+                        value={tenant.storagePlanId}
+                        plans={storagePlans}
+                        disabled={isStoragePlanUpdating(tenant.id)}
+                        onChange={(nextPlan) => handleStoragePlanChange(tenant, nextPlan)}
                       />
                     </td>
                     <td className="px-3 py-3 align-top">
@@ -264,37 +340,37 @@ export function SuperAdminTenantManager() {
                     <td className="px-3 py-3 text-center align-top">
                       <StatusBadge status={tenant.status} banned={tenant.banned} />
                     </td>
-                    <td className="px-3 py-1 text-center align-top">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className={tenant.banned ? 'text-rose-400' : undefined}
-                        onClick={() => handleToggleBanned(tenant)}
-                        disabled={isBanUpdating(tenant.id)}
-                      >
-                        {isBanUpdating(tenant.id)
-                          ? t('superadmin.tenants.button.processing')
-                          : tenant.banned
-                            ? t('superadmin.tenants.button.unban')
-                            : t('superadmin.tenants.button.ban')}
-                      </Button>
-                    </td>
                     <td className="px-3 py-3 align-top text-text-secondary text-xs">
                       {formatDateLabel(tenant.createdAt)}
                     </td>
                     <td className="px-3 py-2 align-top text-right">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="destructive"
-                        disabled={isDeleting(tenant.id)}
-                        onClick={() => handleDeleteTenant(tenant)}
-                      >
-                        {isDeleting(tenant.id)
-                          ? t('superadmin.tenants.button.processing')
-                          : t('superadmin.tenants.button.delete')}
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className={tenant.banned ? 'text-rose-400' : undefined}
+                          onClick={() => handleToggleBanned(tenant)}
+                          disabled={isBanUpdating(tenant.id)}
+                        >
+                          {isBanUpdating(tenant.id)
+                            ? t('superadmin.tenants.button.processing')
+                            : tenant.banned
+                              ? t('superadmin.tenants.button.unban')
+                              : t('superadmin.tenants.button.ban')}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          disabled={isDeleting(tenant.id)}
+                          onClick={() => handleDeleteTenant(tenant)}
+                        >
+                          {isDeleting(tenant.id)
+                            ? t('superadmin.tenants.button.processing')
+                            : t('superadmin.tenants.button.delete')}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -311,6 +387,8 @@ export function SuperAdminTenantManager() {
               </div>
               <div className="flex items-center gap-2">
                 <Button
+                  type="button"
+                  variant="ghost"
                   className="size-8"
                   disabled={page <= 1 || tenantsQuery.isFetching}
                   onClick={() => setPage((p) => p - 1)}
@@ -318,9 +396,11 @@ export function SuperAdminTenantManager() {
                   <ChevronLeftIcon className="size-4" />
                 </Button>
                 <div className="text-sm text-text-secondary font-medium">
-                  {page} / {totalPages || 1}
+                  <span>{page}</span> / <span>{totalPages || 1}</span>
                 </div>
                 <Button
+                  type="button"
+                  variant="ghost"
                   className="size-8"
                   disabled={page >= totalPages || tenantsQuery.isFetching}
                   onClick={() => setPage((p) => p + 1)}
@@ -367,7 +447,40 @@ function PlanSelector({
   )
 }
 
-function PlanDescription({ plan }: { plan: BillingPlanDefinition | undefined }) {
+function StoragePlanSelector({
+  value,
+  plans,
+  disabled,
+  onChange,
+}: {
+  value?: string | null
+  plans: StoragePlanDefinition[]
+  disabled?: boolean
+  onChange: (value: string) => void
+}) {
+  const { t } = useTranslation()
+  const current = value ?? 'default'
+  return (
+    <div className="space-y-1">
+      <Select value={current} onValueChange={(val) => onChange(val)} disabled={disabled}>
+        <SelectTrigger>
+          <SelectValue placeholder={t('superadmin.tenants.storage-plan.placeholder')} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="default">{t('superadmin.tenants.storage-plan.default')}</SelectItem>
+          {plans.map((plan) => (
+            <SelectItem value={plan.id} key={plan.id}>
+              {plan.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {current !== 'default' && <PlanDescription plan={plans.find((p) => p.id === current)} />}
+    </div>
+  )
+}
+
+function PlanDescription({ plan }: { plan: BillingPlanDefinition | StoragePlanDefinition | undefined }) {
   if (!plan) {
     return null
   }

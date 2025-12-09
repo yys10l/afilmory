@@ -3,6 +3,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Query } from '@afilmory/fr
 import { DbAccessor } from 'core/database/database.provider'
 import { Roles } from 'core/guards/roles.decorator'
 import { BypassResponseTransform } from 'core/interceptors/response-transform.decorator'
+import { SystemSettingService } from 'core/modules/configuration/system-setting/system-setting.service'
 import { BillingPlanService } from 'core/modules/platform/billing/billing-plan.service'
 import { BillingUsageService } from 'core/modules/platform/billing/billing-usage.service'
 import { TenantService } from 'core/modules/platform/tenant/tenant.service'
@@ -10,7 +11,14 @@ import { desc, eq } from 'drizzle-orm'
 
 import type { BillingPlanId } from '../billing/billing-plan.types'
 import { DataManagementService } from '../data-management/data-management.service'
-import { UpdateTenantBanDto, UpdateTenantPlanDto } from './super-admin.dto'
+import {
+  ListTenantsQueryDto,
+  TenantIdParamDto,
+  TenantPhotosQueryDto,
+  UpdateTenantBanDto,
+  UpdateTenantPlanDto,
+  UpdateTenantStoragePlanDto,
+} from './super-admin.dto'
 
 @Controller('super-admin/tenants')
 @Roles('superadmin')
@@ -21,17 +29,18 @@ export class SuperAdminTenantController {
     private readonly dataManagementService: DataManagementService,
     private readonly billingPlanService: BillingPlanService,
     private readonly billingUsageService: BillingUsageService,
+    private readonly systemSettings: SystemSettingService,
     private readonly db: DbAccessor,
   ) {}
 
   @Get('/:tenantId/photos')
-  async getTenantPhotos(@Param('tenantId') tenantId: string, @Query('limit') limit = '20') {
+  async getTenantPhotos(@Param() params: TenantIdParamDto, @Query() query: TenantPhotosQueryDto) {
     const photos = await this.db
       .get()
       .select()
       .from(photoAssets)
-      .where(eq(photoAssets.tenantId, tenantId))
-      .limit(Number(limit))
+      .where(eq(photoAssets.tenantId, params.tenantId))
+      .limit(query.limit)
       .orderBy(desc(photoAssets.createdAt))
 
     return {
@@ -43,22 +52,18 @@ export class SuperAdminTenantController {
   }
 
   @Get('/')
-  async listTenants(
-    @Query('page') page = '1',
-    @Query('limit') limit = '20',
-    @Query('status') status?: string,
-    @Query('sortBy') sortBy?: 'createdAt' | 'name',
-    @Query('sortDir') sortDir?: 'asc' | 'desc',
-  ) {
-    const [tenantResult, plans] = await Promise.all([
+  async listTenants(@Query() query: ListTenantsQueryDto) {
+    const [tenantResult, plans, storagePlanCatalog] = await Promise.all([
       this.tenantService.listTenants({
-        page: Number(page),
-        limit: Number(limit),
-        status: status as any,
-        sortBy,
-        sortDir,
+        page: query.page,
+        limit: query.limit,
+        search: query.search,
+        status: query.status,
+        sortBy: query.sortBy,
+        sortDir: query.sortDir,
       }),
       Promise.resolve(this.billingPlanService.getPlanDefinitions()),
+      this.systemSettings.getStoragePlanCatalog(),
     ])
 
     const { items: tenantAggregates, total } = tenantResult
@@ -72,24 +77,34 @@ export class SuperAdminTenantController {
         usageTotals: usageTotalsMap[aggregate.tenant.id] ?? [],
       })),
       plans,
+      storagePlans: Object.entries(storagePlanCatalog).map(([id, def]) => ({
+        id,
+        ...def,
+      })),
       total,
     }
   }
 
   @Patch('/:tenantId/plan')
-  async updateTenantPlan(@Param('tenantId') tenantId: string, @Body() dto: UpdateTenantPlanDto) {
-    await this.billingPlanService.updateTenantPlan(tenantId, dto.planId as BillingPlanId)
+  async updateTenantPlan(@Param() params: TenantIdParamDto, @Body() dto: UpdateTenantPlanDto) {
+    await this.billingPlanService.updateTenantPlan(params.tenantId, dto.planId as BillingPlanId)
+    return { updated: true }
+  }
+
+  @Patch('/:tenantId/storage-plan')
+  async updateTenantStoragePlan(@Param() params: TenantIdParamDto, @Body() dto: UpdateTenantStoragePlanDto) {
+    await this.tenantService.updateStoragePlan(params.tenantId, dto.storagePlanId)
     return { updated: true }
   }
 
   @Patch('/:tenantId/ban')
-  async updateTenantBan(@Param('tenantId') tenantId: string, @Body() dto: UpdateTenantBanDto) {
-    await this.tenantService.setBanned(tenantId, dto.banned)
+  async updateTenantBan(@Param() params: TenantIdParamDto, @Body() dto: UpdateTenantBanDto) {
+    await this.tenantService.setBanned(params.tenantId, dto.banned)
     return { updated: true }
   }
 
   @Delete('/:tenantId')
-  async deleteTenant(@Param('tenantId') tenantId: string) {
-    return await this.dataManagementService.deleteTenantAccountById(tenantId)
+  async deleteTenant(@Param() params: TenantIdParamDto) {
+    return await this.dataManagementService.deleteTenantAccountById(params.tenantId)
   }
 }
