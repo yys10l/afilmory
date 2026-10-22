@@ -35,7 +35,7 @@ export function createS3Client(config: S3CompatibleConfig): SimpleS3Client {
   const signer = new SigV4Signer({
     accessKeyId,
     secretAccessKey,
-
+    sessionToken: config.sessionToken,
     region,
     service: sigV4Service,
   })
@@ -77,35 +77,60 @@ function buildBaseUrl(params: {
         return `https://${bucket}.cos.${region}.myqcloud.com/`
       }
       default: {
-        return `https://${bucket}.s3.${region}.amazonaws.com/`
+        const host = `s3.${region}.amazonaws.com${region.startsWith('cn-') ? '.cn' : ''}`
+        // S3's wildcard TLS certificate does not cover dotted bucket names.
+        return bucket.includes('.') ? `https://${host}/${encodeRfc3986(bucket)}/` : `https://${bucket}.${host}/`
       }
     }
   }
 
-  const trimmed = endpoint.replace(/\/$/, '')
-  if (trimmed.includes('{bucket}')) {
-    return `${trimmed.replace('{bucket}', bucket)}/`
-  }
+  const explicitBucket = endpoint.includes('{bucket}')
+  const url = parseS3BaseUrl(endpoint.replaceAll('{bucket}', bucket), 'S3 endpoint')
+  const basePath = url.pathname.replace(/\/+$/, '')
+  const hostname = url.hostname.toLowerCase()
+  // Account/service hosts can themselves start with the bucket name (e.g. bucket "s3").
+  const serviceEndpoint =
+    /^s3(?:[.-](?:dualstack\.)?[a-z0-9-]+)?\.amazonaws\.com(?:\.cn)?$/.test(hostname) ||
+    /^[^.]+(?:\.(?:eu|fedramp))?\.r2\.cloudflarestorage\.com$/.test(hostname) ||
+    /^(?:oss-[^.]+\.aliyuncs\.com|cos\.[^.]+\.myqcloud\.com)$/.test(hostname)
+  const bucketInHost = !serviceEndpoint && (hostname === bucket || hostname.startsWith(`${bucket}.`))
+  const bucketInPath = safeDecodeURIComponent(basePath.slice(basePath.lastIndexOf('/') + 1)) === bucket
 
-  if (trimmed.includes(bucket)) {
-    return trimmed.endsWith('/') ? trimmed : `${trimmed}/`
+  if (explicitBucket || bucketInHost || bucketInPath) {
+    url.pathname = `${basePath}/`
+  } else if (provider === 'oss' || provider === 'cos' || /\.(?:aliyuncs\.com|myqcloud\.com)$/.test(hostname)) {
+    url.hostname = `${bucket}.${hostname}`
+    url.pathname = `${basePath}/`
+  } else {
+    // Generic S3 endpoints, including R2 account endpoints, keep their configured host.
+    url.pathname = `${basePath}/${encodeRfc3986(bucket)}/`
   }
+  return url.toString()
+}
 
-  if (provider === 'oss' || /aliyuncs\.com/.test(trimmed)) {
-    return ensureTrailingSlash(injectBucketAsSubdomain(trimmed, bucket))
+export function parseS3BaseUrl(value: string, name: string): URL {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error(`${name} must be an absolute HTTP(S) URL`)
   }
-
-  if (provider === 'cos' || /myqcloud\.com/.test(trimmed)) {
-    return ensureTrailingSlash(injectBucketAsSubdomain(trimmed, bucket))
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || /[?#]/.test(value)) {
+    throw new Error(`${name} must be an HTTP(S) URL without credentials, query or fragment`)
   }
-
-  return `${trimmed}/${bucket}/`
+  url.pathname = canonicalizePath(url.pathname)
+  return url
 }
 
 export function encodeS3Key(key: string): string {
+  // WHATWG URL/fetch removes these segments before sending, changing the object key.
+  // Fail explicitly instead of reading, overwriting or deleting a different object.
+  if (key.split('/').some((segment) => segment === '.' || segment === '..')) {
+    throw new Error('S3 object keys with standalone dot segments are not supported by fetch')
+  }
   return key
     .split('/')
-    .map((segment) => encodeURIComponent(segment))
+    .map((segment) => encodeRfc3986(segment))
     .join('/')
 }
 
@@ -154,43 +179,28 @@ function inferSigV4Service(provider: S3CompatibleProviderName): string {
   }
 }
 
-function ensureTrailingSlash(value: string): string {
-  return value.endsWith('/') ? value : `${value}/`
-}
-
-function injectBucketAsSubdomain(endpoint: string, bucket: string): string {
-  if (!/^https?:\/\//i.test(endpoint)) {
-    return `${endpoint.replace(/\/$/, '')}/${bucket}`
-  }
-
-  try {
-    const url = new URL(endpoint)
-    if (!url.hostname.startsWith(`${bucket}.`)) {
-      url.hostname = `${bucket}.${url.hostname}`
-    }
-    return url.toString()
-  } catch {
-    return `${endpoint.replace(/\/$/, '')}/${bucket}`
-  }
-}
-
 class SigV4Signer {
   constructor(
     private readonly options: {
       accessKeyId: string
       secretAccessKey: string
-
+      sessionToken?: string
       region: string
       service: string
     },
   ) {}
 
   async sign(url: URL, init: RequestInit): Promise<{ url: string; init: RequestInit }> {
+    // Use the same encoded path for the canonical request and the HTTP request.
+    url.pathname = canonicalizePath(url.pathname)
     const method = (init.method ?? 'GET').toUpperCase()
     const headers = new Headers(init.headers ?? {})
     headers.delete('authorization')
 
     headers.set('host', url.host)
+    if (this.options.sessionToken) {
+      headers.set('x-amz-security-token', this.options.sessionToken)
+    }
 
     const body = init.body ?? null
     const payloadHash = await this.hashPayload(body)
@@ -284,9 +294,10 @@ class SigV4Signer {
 function buildCanonicalQuery(params: URLSearchParams): string {
   const entries: Array<{ key: string; value: string }> = []
   params.forEach((value, key) => {
-    entries.push({ key: encodeURIComponent(key), value: encodeURIComponent(value) })
+    entries.push({ key: encodeRfc3986(key), value: encodeRfc3986(value) })
   })
-  entries.sort((a, b) => (a.key === b.key ? a.value.localeCompare(b.value) : a.key.localeCompare(b.key)))
+  const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+  entries.sort((a, b) => compare(a.key, b.key) || compare(a.value, b.value))
   return entries.map(({ key, value }) => `${key}=${value}`).join('&')
 }
 
@@ -295,7 +306,7 @@ function buildCanonicalHeaders(headers: Headers): string {
     name.toLowerCase(),
     value.trim().replaceAll(/\s+/g, ' '),
   ])
-  pairs.sort((a, b) => a[0].localeCompare(b[0]))
+  pairs.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
   return pairs.map(([name, value]) => `${name}:${value}\n`).join('')
 }
 

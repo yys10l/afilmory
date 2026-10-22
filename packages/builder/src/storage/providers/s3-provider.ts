@@ -6,6 +6,7 @@ import { backoffDelay, sleep } from '../../../../utils/src/backoff.js'
 import { Semaphore } from '../../../../utils/src/semaphore.js'
 import { SUPPORTED_FORMATS } from '../../constants/index.js'
 import { logger } from '../../logger/index.js'
+import { encodeS3Key, parseS3BaseUrl } from '../../s3/client.js'
 import type {
   ProgressCallback,
   S3CompatibleConfig,
@@ -248,8 +249,8 @@ export class S3StorageProvider implements StorageProvider {
   generatePublicUrl(key: string): string {
     // 如果设置了自定义域名，直接使用自定义域名
     if (this.config.customDomain) {
-      const customDomain = this.config.customDomain.replace(/\/$/, '') // 移除末尾的斜杠
-      return `${customDomain}/${key}`
+      const customDomain = parseS3BaseUrl(this.config.customDomain, 'S3 customDomain').toString().replace(/\/+$/, '')
+      return `${customDomain}/${encodeS3Key(key)}`
     }
     return this.client.buildObjectUrl(key)
   }

@@ -23,6 +23,45 @@ const s3Config: StorageConfig = {
 }
 ```
 
+### Cloudflare R2 与 URL 规则
+
+`endpoint` 用于带 SigV4 签名的 S3 API 请求；`customDomain` 只用于生成浏览器访问地址。
+R2 的公开自定义域名不是 S3 API 端点，不能用于列出存储桶。R2 示例：
+
+```typescript
+const r2Config: StorageConfig = {
+  provider: 's3',
+  bucket: 'photos',
+  region: 'auto',
+  endpoint: 'https://<ACCOUNT_ID>.r2.cloudflarestorage.com',
+  accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  prefix: 'album/',
+  customDomain: 'https://photos.example.com',
+}
+```
+
+| 配置                                                      | 对象 URL（key 为 `album/a.jpg`）                                   |
+| --------------------------------------------------------- | ------------------------------------------------------------------ |
+| AWS 未指定 endpoint                                       | `https://photos.s3.<region>.amazonaws.com/album/a.jpg`             |
+| R2 账户 endpoint                                          | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com/photos/album/a.jpg` |
+| 普通 endpoint `https://store.example.com/proxy`           | `https://store.example.com/proxy/photos/album/a.jpg`               |
+| endpoint 已以 `/photos` 结尾，或主机以完整 `photos.` 开头 | 不再追加 Bucket；标准服务/账户主机除外                             |
+| endpoint 含 `{bucket}`                                    | 替换所有占位符，使用指定的地址结构                                 |
+| customDomain `https://photos.example.com`                 | `https://photos.example.com/album/a.jpg`，不追加 Bucket            |
+
+- 默认 AWS 中国区域使用 `amazonaws.com.cn`；默认 AWS 含点 Bucket 使用路径形式，避免通配 TLS 证书不匹配。
+- AWS 的 `region` 必须与 Bucket 区域一致；指定 endpoint 不会自动推断签名区域。
+- API 和公开基地址均须为完整 HTTP(S) URL，不能包含用户名、密码、查询字符串或片段；可以包含路径前缀。
+- key 和列表 prefix 传入原始字符串，不要预先 URL 编码。字面量 `%2F` 是 key 的一部分，会编码为 `%252F`。保留 key 中的 `/`、连续 `/` 及首尾 `/`。
+- `prefix` 用于列表筛选，不会再次添加到已经完整的对象 key 上。
+- 独立 `.`、`..` key 路径段会明确报错：当前 `fetch` 传输会折叠这些路径，不能保证访问原对象；需要重命名此类对象或另行采用保留原始路径的传输实现。
+- Bucket 是否已包含在任意代理地址中无法完全自动推断。主机以完整 Bucket 开头或末尾路径恰为 Bucket，按已包含处理；复杂代理路由请使用 `{bucket}` 明确指定。
+- 默认公开 URL 不带签名，不会授予公开访问权限。R2 相册展示应配置已启用公开访问的 `customDomain`。
+
+离线回归测试：`pnpm --filter @afilmory/builder test:s3`。测试仅使用 AWS 公开示例凭据、模拟 fetch 与本机 HTTP 服务。
+审查依据与旧 PR 处理建议见 [S3 URL 审查记录](../../../../../docs/s3-url-audit.md)。
+
 ## 阿里云 OSS 提供商
 
 Aliyun OSS 已提供 SigV4 兼容 API。通过 `provider: 'oss'`，Afilmory 会默认使用 `oss` 作为 SigV4 service 并生成标准的 `bucket.oss-xx.aliyuncs.com` Endpoint。
