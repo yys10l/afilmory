@@ -9,7 +9,8 @@
   "scripts": {
     "build": "tsdown",
     "bump": "nbump",
-    "cli": "tsx src/cli.ts"
+    "cli": "tsx src/cli.ts",
+    "test:s3": "node --import tsx --test tests/s3.test.ts"
   },
   "dependencies": {
     "@vingle/bmp-js": "^0.2.5",

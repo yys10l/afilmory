@@ -56,7 +56,8 @@ export class S3ProviderClient {
     const url = new URL(this.buildObjectUrl())
     url.searchParams.set('list-type', '2')
     if (params?.prefix) {
-      url.searchParams.set('prefix', encodeS3Key(params.prefix))
+      // URLSearchParams encodes the raw value; encoding it here would encode '%' twice.
+      url.searchParams.set('prefix', params.prefix)
     }
     if (params?.maxKeys) {
       url.searchParams.set('max-keys', String(params.maxKeys))
